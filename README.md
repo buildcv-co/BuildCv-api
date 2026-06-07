@@ -2,7 +2,7 @@
 
 API del asistente de CV **BuildCv**: calcula un **puntaje determinista de coincidencia y legibilidad** entre un CV y una vacante — explicable, reproducible y **sin inventar nada** (el número no lo produce ningún LLM). Frontend en repo aparte: **[BuildCv-web](https://github.com/buildcv-co/BuildCv-web)**.
 
-[![CI](https://github.com/buildcv-co/BuildCv-api/actions/workflows/ci.yml/badge.svg)](https://github.com/buildcv-co/BuildCv-api/actions/workflows/ci.yml)
+[![CI](https://github.com/buildcv-co/BuildCv-api/actions/workflows/ci.yml/badge.svg)](https://github.com/buildcv-co/BuildCv-api/actions/workflows/ci.yml) [![License: FSL-1.1-ALv2](https://img.shields.io/badge/license-FSL--1.1--ALv2-2ea44f)](LICENSE.md)
 
 ## Arquitectura
 
@@ -46,3 +46,7 @@ Incluye **`render.yaml`** (blueprint Docker). El contenedor respeta `$PORT` (Ren
 `specs/001-mvp-cv-ats/` (spec · plan · research · data-model · contracts · tasks) y `.specify/memory/constitution.md`. Estrategia general en `PLANEACION.md`.
 
 > .NET 10 · EF Core (v1) · xUnit + FluentAssertions (fijado en 7.x por licencia). Privacidad por diseño: no se persiste el CV; los logs nunca incluyen su contenido.
+
+## Licencia
+
+**FSL-1.1-ALv2** ([Functional Source License](https://fsl.software)) — código a la vista: puedes usar, modificar y redistribuir el software para cualquier propósito **que no compita** con BuildCv. Se convierte automáticamente a **Apache 2.0 a los 2 años**. Ver [`LICENSE.md`](LICENSE.md).

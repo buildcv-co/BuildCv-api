@@ -1,0 +1,238 @@
+# Diccionario de habilidades — perfil tecnología/IT (v0).
+# Recurso versionado y revisable por PR. La carga lo sella en cada ScoreResult (FR-013).
+# category: hardSkill | tool | softSkill | generic
+# confusableWith / implies / related / broader usan IDs canónicos.
+version: "2026.06.0"
+skills:
+  # --- Lenguajes ---
+  - id: csharp
+    canonical: "C#"
+    category: hardSkill
+    aliases: ["c sharp", "csharp"]
+    implies: [dotnet]
+    related: [dotnet, aspnet-core]
+    confusableWith: [c, cpp]
+  - id: cpp
+    canonical: "C++"
+    category: hardSkill
+    aliases: ["cpp"]
+    confusableWith: [c, csharp]
+  - id: java
+    canonical: "Java"
+    category: hardSkill
+    related: [spring]
+    confusableWith: [javascript, scala, kotlin]
+  - id: javascript
+    canonical: "JavaScript"
+    category: hardSkill
+    aliases: ["js"]
+    related: [typescript, node]
+    confusableWith: [java]
+  - id: typescript
+    canonical: "TypeScript"
+    category: hardSkill
+    aliases: ["ts"]
+    implies: [javascript]
+    related: [javascript, angular, react]
+  - id: python
+    canonical: "Python"
+    category: hardSkill
+    aliases: ["py"]
+    related: [django, fastapi]
+  - id: go
+    canonical: "Go"
+    category: hardSkill
+    aliases: ["golang"]
+    confusableWith: [mongodb]
+  - id: ruby
+    canonical: "Ruby"
+    category: hardSkill
+    related: [rails]
+    confusableWith: [r]
+  - id: php
+    canonical: "PHP"
+    category: hardSkill
+    related: [laravel]
+    confusableWith: [perl]
+  - id: kotlin
+    canonical: "Kotlin"
+    category: hardSkill
+    confusableWith: [java, scala]
+  - id: sql
+    canonical: "SQL"
+    category: hardSkill
+    related: [postgresql, sql-server, mysql]
+
+  # --- Plataformas / frameworks ---
+  - id: dotnet
+    canonical: ".NET"
+    category: tool
+    aliases: ["dotnet", "net core", ".net core", "dotnet core"]
+    related: [csharp, aspnet-core, ef-core]
+  - id: aspnet-core
+    canonical: "ASP.NET Core"
+    category: tool
+    aliases: ["asp.net core", "aspnet core", "asp.net", "aspnet"]
+    implies: [dotnet]
+    related: [csharp, rest-api, web-api]
+  - id: ef-core
+    canonical: "Entity Framework Core"
+    category: tool
+    aliases: ["ef core", "efcore", "entity framework", "entity framework core"]
+    implies: [dotnet]
+    related: [sql, orm]
+  - id: node
+    canonical: "Node.js"
+    category: tool
+    aliases: ["node", "nodejs"]
+    related: [javascript, express]
+  - id: react
+    canonical: "React"
+    category: tool
+    aliases: ["react.js", "reactjs"]
+    related: [javascript, typescript, nextjs]
+    confusableWith: [react-native]
+  - id: nextjs
+    canonical: "Next.js"
+    category: tool
+    aliases: ["nextjs", "next"]
+    implies: [react]
+    related: [react]
+  - id: angular
+    canonical: "Angular"
+    category: tool
+    aliases: ["angularjs"]
+    related: [typescript]
+  - id: vue
+    canonical: "Vue.js"
+    category: tool
+    aliases: ["vue", "vuejs"]
+    related: [javascript]
+  - id: spring
+    canonical: "Spring"
+    category: tool
+    aliases: ["spring boot", "springboot"]
+    implies: [java]
+  - id: django
+    canonical: "Django"
+    category: tool
+    implies: [python]
+  - id: fastapi
+    canonical: "FastAPI"
+    category: tool
+    aliases: ["fast api"]
+    implies: [python]
+
+  # --- Bases de datos ---
+  - id: postgresql
+    canonical: "PostgreSQL"
+    category: tool
+    aliases: ["postgres", "psql"]
+    implies: [sql]
+    related: [sql]
+    broader: [sql]
+  - id: sql-server
+    canonical: "SQL Server"
+    category: tool
+    aliases: ["mssql", "microsoft sql server"]
+    implies: [sql]
+    related: [sql]
+    broader: [sql]
+  - id: mysql
+    canonical: "MySQL"
+    category: tool
+    implies: [sql]
+    broader: [sql]
+  - id: mongodb
+    canonical: "MongoDB"
+    category: tool
+    aliases: ["mongo", "mongo db"]
+    related: [nosql]
+    confusableWith: [go]
+  - id: redis
+    canonical: "Redis"
+    category: tool
+
+  # --- Nube / DevOps ---
+  - id: docker
+    canonical: "Docker"
+    category: tool
+    related: [kubernetes, containers]
+  - id: kubernetes
+    canonical: "Kubernetes"
+    category: tool
+    aliases: ["k8s", "kube"]
+    related: [docker]
+  - id: azure
+    canonical: "Azure"
+    category: tool
+    aliases: ["microsoft azure", "azure devops"]
+    related: [cloud, dotnet]
+  - id: aws
+    canonical: "AWS"
+    category: tool
+    aliases: ["amazon web services"]
+    related: [cloud]
+  - id: gcp
+    canonical: "Google Cloud"
+    category: tool
+    aliases: ["gcp", "google cloud platform"]
+    related: [cloud]
+  - id: git
+    canonical: "Git"
+    category: tool
+    related: [github, ci-cd]
+  - id: ci-cd
+    canonical: "CI/CD"
+    category: tool
+    aliases: ["ci/cd", "cicd", "integracion continua", "integracion y entrega continua"]
+    related: [git, docker]
+
+  # --- Conceptos / prácticas ---
+  - id: rest-api
+    canonical: "REST API"
+    category: hardSkill
+    aliases: ["rest", "api rest", "restful", "apis rest"]
+    related: [web-api, http]
+  - id: web-api
+    canonical: "Web API"
+    category: hardSkill
+    aliases: ["apis web", "servicios web"]
+    related: [rest-api]
+  - id: microservices
+    canonical: "Microservicios"
+    category: hardSkill
+    aliases: ["microservices"]
+    related: [docker, kubernetes]
+  - id: unit-testing
+    canonical: "Pruebas unitarias"
+    category: hardSkill
+    aliases: ["unit testing", "tests unitarios", "testing", "pruebas automatizadas"]
+    related: [tdd]
+  - id: tdd
+    canonical: "TDD"
+    category: hardSkill
+    aliases: ["test driven development", "desarrollo guiado por pruebas"]
+    related: [unit-testing]
+  - id: clean-architecture
+    canonical: "Clean Architecture"
+    category: hardSkill
+    aliases: ["arquitectura limpia", "clean arch"]
+    related: [solid]
+  - id: solid
+    canonical: "SOLID"
+    category: hardSkill
+
+  # --- Blandas / generales ---
+  - id: agile
+    canonical: "Metodologías ágiles"
+    category: softSkill
+    aliases: ["agile", "agil", "scrum", "metodologias agiles", "kanban"]
+  - id: teamwork
+    canonical: "Trabajo en equipo"
+    category: softSkill
+    aliases: ["teamwork", "colaboracion"]
+  - id: english
+    canonical: "Inglés"
+    category: generic
+    aliases: ["ingles", "english", "ingles tecnico"]

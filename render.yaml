@@ -1,0 +1,15 @@
+# Blueprint de Render para la API .NET (Docker).
+# Importa este repo en Render como "Blueprint" y se crea el servicio automáticamente.
+services:
+  - type: web
+    name: buildcv-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health/live
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      # Para el hito M1 (adaptación con IA), define la clave en el panel de Render:
+      # - key: Ai__ApiKey
+      #   sync: false

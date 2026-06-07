@@ -1,0 +1,26 @@
+# ---------- .NET ----------
+**/bin/
+**/obj/
+*.user
+*.suo
+.vs/
+TestResults/
+coverage/
+*.coverage
+*.trx
+*.binlog
+
+# Secretos / configuración local
+appsettings.*.local.json
+.env
+.env.*
+!.env.example
+
+# ---------- Sistema ----------
+.DS_Store
+Thumbs.db
+
+# ---------- Tooling de agentes ----------
+.agents/
+skills-lock.json
+.claude/

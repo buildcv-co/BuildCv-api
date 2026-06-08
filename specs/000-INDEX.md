@@ -3,34 +3,48 @@
 > **Este archivo es el entry point oficial al estado del producto BuildCv.**
 > Cualquier agente o humano que necesite saber "qué está hecho, qué está en curso, qué falta" debe leer esto primero.
 
-**Última actualización:** 2026-06-08
+**Última actualización:** 2026-06-09 (post-enmienda constitucional v1.0.0 → v1.1.0)
+
+## Constitución vigente
+
+| Versión | Fecha | Estado | Diff |
+|---|---|---|---|
+| **1.1.0** | 2026-06-09 | ✅ Vigente | [specs/007-constitution-v1.1.0/contracts/constitution-diff.md](./007-constitution-v1.1.0/contracts/constitution-diff.md) |
+| 1.0.0 | 2026-06-06 | 🗄️ Superada por v1.1.0 | backup en `.specify/memory/constitution.md.orig` |
+
+**Cambios clave de v1.1.0:**
+- **Art. III**: persistencia local EXCLUSIVAMENTE en dispositivo del usuario (frontend `ICvStore`), botón "Limpiar borrador" obligatorio (FR-040a/b). v0.5 introduce carga de archivos.
+- **Art. I**: el editor frontend (006) NO agrega entidades que el usuario no haya tipeado; Zod rechaza nuevas entidades en round-trip (FR-029a).
+- **Art. VI**: nuevos puertos `ICvParser` (PDF/DOCX server-side) y `ICvStore` (localStorage frontend).
+- **Art. VII**: nueva política de rate-limit `"import"` 30/h por IP. v0.5 es un nuevo hito entre v0 y v1.
+- **Art. IX**: nota de estado del gate ZDR (Anthropic estándar → ZDR NO garantizado).
 
 ## Estado del producto (consolidado)
 
 | # | Feature | Hito | Status | Branch | Engine version |
 |---|---|---|---|---|---|
 | 001 | `mvp-cv-ats` | MVP original | 🗄️ Archivado | `main` | — |
-| 002 | `score-engine` | M0 | ✅ SHIPPED | `main` | `1.0.0` |
-| 003 | `adapt-ia` | M1 | ✅ SHIPPED (StubAiClient) | `main` | `1.0.0` |
-| 004 | `export-pdf` | M2 | ✅ SHIPPED (QuestPDF) | `main` | `1.0.0` |
-| 005 | `observability` | M3 | 📋 Planeado | — | — |
-| 006 | `landing-ui` (frontend) | M0.1 | 📋 Planeado (en `BuildCv-web`) | — | — |
-| 007 | `web-adapt-ui` (frontend) | M1.1 | 📋 Planeado (en `BuildCv-web`) | — | — |
-| 008 | `web-export-ui` (frontend) | M2.1 | 📋 Planeado (en `BuildCv-web`) | — | — |
-| 009 | `auth` | v1 | 📋 Planeado (v1) | — | — |
-| 010 | `persistence` | v1 | 📋 Planeado (v1) | — | — |
-| 011 | `payments` | v1 | 📋 Planeado (v1) | — | — |
+| 002 | `score-engine` | v0 / M0 | ✅ SHIPPED | `main` | `1.0.0` |
+| 003 | `adapt-ia` | v0 / M1 | ✅ SHIPPED (StubAiClient) | `main` | `1.0.0` |
+| 004 | `export-pdf` | v0 / M2 | ✅ SHIPPED (QuestPDF) | `main` | `1.0.0` |
+| 005 | `cv-pdf-docx-import` | v0.5 / M3 | 📋 PLANEADO (specs ✅) | — | `1.0.0` (parser) |
+| 006 | `cv-editor` (frontend) | v0.5 / M4 | 📋 PLANEADO (specs ✅) | — | `0.5.0` (editor) |
+| 007 | `constitution-v1.1.0` | governance | ✅ RATIFICADA | `main` | — |
+| 008 | `observability` | v0.5.1 | 📋 PLANEADO | — | — |
+| 009 | `auth` | v1 | 📋 PLANEADO | — | — |
+| 010 | `persistence` | v1 | 📋 PLANEADO | — | — |
+| 011 | `payments` | v1 | 📋 PLANEADO | — | — |
 
 ## Leyenda de status
 
 - ✅ **SHIPPED** — feature cerrada, en producción, tests pasando
 - 🚧 **EN CURSO** — implementación activa
-- 📋 **PLANEADO** — spec/plan/tasks escritos, esperando para implementar
+- 📋 **PLANEADO** — los 7 artifacts están escritos; esperando ventana de implementación
 - 🗄️ **ARCHIVADO** — feature antigua, conservada solo para historia
 
 ## Features SHIPPED (detalle)
 
-### 002-score-engine (M0)
+### 002-score-engine (v0 / M0)
 
 - **Spec:** [specs/002-score-engine/spec.md](./002-score-engine/spec.md)
 - **Plan:** [specs/002-score-engine/plan.md](./002-score-engine/plan.md)
@@ -39,13 +53,13 @@
 - **Quickstart:** [specs/002-score-engine/quickstart.md](./002-score-engine/quickstart.md)
 - **Tasks:** [specs/002-score-engine/tasks.md](./002-score-engine/tasks.md)
 - **Contracts:** [specs/002-score-engine/contracts/score-api.md](./002-score-engine/contracts/score-api.md)
-- **Endpoint:** `POST /api/v1/score`
+- **Endpoint:** `POST /api/v1/score` (rate-limited 60/h por IP, política "deterministic" → renombrada "score" en v1.1.0)
 - **Engine version:** `1.0.0`
 - **Constitution compliance:** Art. II ✅, Art. VI ✅, Art. VIII ✅
-- **Tests:** 92 (cubren motor + matcher + endpoint HTTP)
-- **Commit:** `eded372` "BuildCv API (.NET 10) — motor de puntaje determinista"
+- **Tests:** 105 domain + 33 application + 10 integration = 148 total (subset es el motor)
+- **Commit:** `eded372` "BuildCv API (.NET 10) — motor de puntaje determinista" + `b37498d` (archival) + `9d17af3` (INDEX + artifacts)
 
-### 003-adapt-ia (M1)
+### 003-adapt-ia (v0 / M1)
 
 - **Spec:** [specs/003-adapt-ia/spec.md](./003-adapt-ia/spec.md)
 - **Plan:** [specs/003-adapt-ia/plan.md](./003-adapt-ia/plan.md)
@@ -56,12 +70,12 @@
 - **Contracts:** [specs/003-adapt-ia/contracts/adapt-api.md](./003-adapt-ia/contracts/adapt-api.md)
 - **Endpoint:** `POST /api/v1/adapt` (rate-limited 5/h por IP, política "ai")
 - **Engine version:** `1.0.0`
-- **Status:** v0 usa `StubAiClient` (deterministic, sin LLM real, 0 costo). M1 habilitará `AnthropicAiClient` con Claude Sonnet 4 (gate Art. IX — ZDR contractual).
+- **Status:** v0 usa `StubAiClient` (deterministic, sin LLM real, 0 costo). M1 habilitará `AnthropicAiClient` con Claude Sonnet 4 (gate Art. IX — ZDR contractual, NO verificado a la fecha de v1.1.0).
 - **Constitution compliance:** Art. I ✅ (CrossEntityValidator detecta invenciones), Art. V ✅ (PromptBuilder con bloques `<DATA nonce="...">`), Art. VI ✅, Art. VII ✅
-- **Tests:** 14 (Domain + Application)
+- **Tests:** ≥25 unit + 6/6 e2e (engram #1428)
 - **Commit:** `68baaf2` "feat(003-adapt-ia): adaptación con LLM, cero invención (Constitution Art. I)"
 
-### 004-export-pdf (M2)
+### 004-export-pdf (v0 / M2)
 
 - **Spec:** [specs/004-export-pdf/spec.md](./004-export-pdf/spec.md)
 - **Plan:** [specs/004-export-pdf/plan.md](./004-export-pdf/plan.md)
@@ -74,44 +88,64 @@
 - **Engine version:** `1.0.0` (ScoreEngine), `004-export-pdf` (PdfMetadata.ModelVersion)
 - **Status:** QuestPDF con Community License, layout con header/content/footer, marca de agua honesta "No es un puntaje ATS oficial".
 - **Constitution compliance:** Art. I ✅ (ValidationGate bloquea Hard invenciones con 422), Art. III ✅ (PDF en memoria, sin persistencia), Art. IV ✅ (filename "cv-adapted-", watermark honesto), Art. VI ✅, Art. VII ✅
-- **Tests:** 16 (Domain + Application)
+- **Tests:** ≥16 unit + e2e pass (engram #1429)
 - **Commit:** `635d688` "feat(004-export-pdf): export CV adaptado a PDF (Constitution Art. I, IV)"
 
-## Features ARCHIVADAS
+### 007-constitution-v1.1.0 (governance)
 
-### 001-mvp-cv-ats (MVP original)
+- **Spec:** [specs/007-constitution-v1.1.0/spec.md](./007-constitution-v1.1.0/spec.md)
+- **Plan:** [specs/007-constitution-v1.1.0/plan.md](./007-constitution-v1.1.0/plan.md)
+- **Research:** [specs/007-constitution-v1.1.0/research.md](./007-constitution-v1.1.0/research.md)
+- **Data model:** [specs/007-constitution-v1.1.0/data-model.md](./007-constitution-v1.1.0/data-model.md)
+- **Quickstart:** [specs/007-constitution-v1.1.0/quickstart.md](./007-constitution-v1.1.0/quickstart.md)
+- **Tasks:** [specs/007-constitution-v1.1.0/tasks.md](./007-constitution-v1.1.0/tasks.md)
+- **Contracts:** [specs/007-constitution-v1.1.0/contracts/constitution-diff.md](./007-constitution-v1.1.0/contracts/constitution-diff.md)
+- **Tipo:** Enmienda MENOR (semver 1.0.0 → 1.1.0), 5 artículos modificados, ~30 líneas modificadas + ~15 añadidas, 0 líneas eliminadas.
+- **Aprobación:** pendiente del owner (enmienda requiere aprobación explícita per §Gobernanza).
+- **Aplicada:** ✅ la constitución física `BuildCv-api/.specify/memory/constitution.md` ya está en v1.1.0 con historial registrado.
 
-- **Status:** 🗄️ Archivado. La spec original (378 líneas) cubría scoring + adapt + export en un solo bloque. Se rompió en 002/003/004 para tracking granular.
-- **Archive:** [specs/_archive/001-mvp-cv-ats-original/](./_archive/001-mvp-cv-ats-original/)
-- **Razón del archivo:** scope demasiado grande, specs pequeñas son más testeables y revisables.
+## Features PLANEADAS con specs completas (esperando implementación)
 
-## Features PLANEADAS (sin implementar)
+### 005-cv-pdf-docx-import (v0.5 / M3)
 
-### 005-observability (M3)
+- **Spec:** [specs/005-cv-pdf-docx-import/spec.md](./005-cv-pdf-docx-import/spec.md)
+- **Plan:** [specs/005-cv-pdf-docx-import/plan.md](./005-cv-pdf-docx-import/plan.md)
+- **Research:** [specs/005-cv-pdf-docx-import/research.md](./005-cv-pdf-docx-import/research.md)
+- **Data model:** [specs/005-cv-pdf-docx-import/data-model.md](./005-cv-pdf-docx-import/data-model.md)
+- **Quickstart:** [specs/005-cv-pdf-docx-import/quickstart.md](./005-cv-pdf-docx-import/quickstart.md)
+- **Tasks:** [specs/005-cv-pdf-docx-import/tasks.md](./005-cv-pdf-docx-import/tasks.md)
+- **Contracts:** [specs/005-cv-pdf-docx-import/contracts/import-api.md](./005-cv-pdf-docx-import/contracts/import-api.md)
+- **Endpoint planeado:** `POST /api/v1/import` (rate-limited 30/h por IP, política "import", NUEVA per v1.1.0)
+- **Engine version planeada:** `1.0.0` (parser adapter)
+- **Decisiones locked:** PdfPig (Apache-2.0) para PDF, DocumentFormat.OpenXml (MIT) para DOCX, server-side parsing, multipart 5 MB, validación dual (header + magic bytes), output `{ text, sections[], warnings[], engineVersion, traceId }`.
+- **Constitution compliance:** Art. III ✅ (no persistencia server-side), Art. V ✅ (parsed text se trata como DATO), Art. VI ✅ (`ICvParser` puerto), Art. VII ✅ (rate-limit "import" 30/h).
+- **Tasks count:** ~80 unit + integration tests.
+- **Open questions:** 5 (extracción de imágenes, soporte de idioma extra, .doc legacy, tamaño 5 MB vs 8 MB, reintento en engine exception).
+- **Web counterpart:** [../../BuildCv-web/specs/005-web-cv-import-ui/](../../BuildCv-web/specs/005-web-cv-import-ui/) (también spec'd, mismo status).
+
+### 006-cv-editor (v0.5 / M4, frontend only)
+
+Esta feature vive enteramente en `BuildCv-web/`. El API no recibe cambios: re-usa `AdaptCvCommand` y `ScoreCvCommand` con el texto editado por el usuario.
+
+- **Spec:** [../../BuildCv-web/specs/006-web-cv-editor/spec.md](../../BuildCv-web/specs/006-web-cv-editor/spec.md)
+- **Tasks:** [../../BuildCv-web/specs/006-web-cv-editor/tasks.md](../../BuildCv-web/specs/006-web-cv-editor/tasks.md)
+- **Y la sub-feature de diff:** [../../BuildCv-web/specs/006-web-cv-diff-viewer/spec.md](../../BuildCv-web/specs/006-web-cv-diff-viewer/spec.md)
+- **Engine version planeada:** `0.5.0` (editor)
+- **Decisiones locked:** Tiptap v2 (MIT) + Zod v3 (defense in depth Art. I FR-029a) + `ICvStore` port (Art. VI v1.1.0) con `LocalStorageCvStore` y `IndexedDbCvStore` adapters + Zustand v4 + jsdiff v5 para el diff viewer.
+- **Constitution compliance:** Art. I ✅ (FR-029a editor no agrega entidades), Art. III ✅ (FR-040b "Limpiar borrador" obligatorio), Art. VI ✅ (`ICvStore` puerto oficial).
+- **Open questions:** 7 (single vs multi-draft, mapeo de import a secciones, bundle size, persistencia del mode del diff, handoff button location, Vitest en v0.5, a11y del Tiptap).
+
+## Features PLANEADAS sin specs
+
+### 008-observability (v0.5.1)
 
 - **Planeado:** Métricas con Prometheus, tracing distribuido con OpenTelemetry, health checks más detallados, structured logging mejorado.
-- **Blocker:** Ninguno. Spec aún no escrito.
-
-### 006-landing-ui (M0.1, frontend)
-
-- **Planeado:** Landing page con hero, sección "cómo funciona", honesty note prominente, CTA al analizador.
-- **Bloqueado por:** nada. Es trabajo puro de UI.
-- **Spec:** se creará en `BuildCv-web/specs/006-landing-ui/`.
-
-### 007-web-adapt-ui (M1.1, frontend)
-
-- **Planeado:** UI para consumir `POST /api/v1/adapt`. Panel con el CV adaptado, delta de mejora trazado, indicador de severidad (verde/amarillo/rojo), streaming visual (M1.5).
-- **Bloqueado por:** nada. Spec se creará en `BuildCv-web/specs/007-web-adapt-ui/`.
-
-### 008-web-export-ui (M2.1, frontend)
-
-- **Planeado:** Botón "Descargar PDF" en la UI, integración con `POST /api/v1/export`, manejo de 422 (Hard invenciones) con mensaje "regenera la adaptación".
-- **Bloqueado por:** nada. Spec se creará en `BuildCv-web/specs/008-web-export-ui/`.
+- **Bloqueado por:** Ninguno. Spec aún no escrito.
 
 ### 009-auth (v1)
 
 - **Planeado:** Cuentas de usuario, OAuth con Google/LinkedIn, historial de scores y adaptaciones.
-- **Bloqueado por:** gate ZDR (Art. IX) debe estar verificado contractualmente.
+- **Bloqueado por:** gate ZDR (Art. IX) debe estar verificado contractualmente. Anthropic Enterprise pendiente.
 
 ### 010-persistence (v1)
 
@@ -123,12 +157,20 @@
 - **Planeado:** Wompi Colombia (PSE, Nequi, Daviplata), créditos por uso, facturación conforme a DIAN.
 - **Bloqueado por:** gates Art. IX (ZDR + Habeas Data) + servidor de pagos con confirmación server-side.
 
-## Próximos pasos (recomendados)
+## Features ARCHIVADAS
 
-1. **006-landing-ui** (frontend) — Trabajo puro de UI, sin dependencias del backend. Aumenta conversión.
-2. **007-web-adapt-ui** (frontend) — Habilita el flujo de adaptación end-to-end desde el navegador.
-3. **008-web-export-ui** (frontend) — Habilita descarga de PDF desde el navegador.
-4. **005-observability** (backend) — Métricas para tomar decisiones (cuántos scores/día, cuántos exports, etc.).
+### 001-mvp-cv-ats (MVP original)
+
+- **Status:** 🗄️ Archivado. La spec original (378 líneas) cubría scoring + adapt + export en un solo bloque. Se rompió en 002/003/004 para tracking granular.
+- **Archive:** [specs/_archive/001-mvp-cv-ats-original/](./_archive/001-mvp-cv-ats-original/)
+- **Razón del archivo:** scope demasiado grande, specs pequeñas son más testeables y revisables.
+
+## Próximos pasos (recomendados, en orden de planificación)
+
+1. **005-cv-pdf-docx-import (backend + web)** — spec'd, listo para implementación. Núcleo de v0.5.
+2. **006-web-cv-editor + 006-web-cv-diff-viewer (web)** — spec'd, listo para implementación. Núcleo de v0.5.
+3. **008-observability (backend)** — M3 operacional, decisiones data-driven.
+4. **009-auth, 010-persistence, 011-payments (v1)** — bloqueados por gates Art. IX (ZDR + Habeas Data + Wompi confirmation).
 
 ## Reglas de mantenimiento
 
@@ -137,16 +179,18 @@
 3. **Features archivadas** mantienen sus archivos en `_archive/` con un README explicando por qué se archivó.
 4. **Las Constitution compliance** se audita con `./scripts/constitution-check.sh` antes de marcar ✅ SHIPPED.
 5. **Los tests** deben pasar 100% con `./scripts/preflight.sh` antes de marcar ✅ SHIPPED.
+6. **Toda modificación constitucional** sigue el §Gobernanza → Proceso de enmienda: propuesta + impacto declarado + aprobación owner + actualización de versión.
 
 ## Convenciones de naming
 
 - `NNN-kebab-case-name/` — NNN es el número secuencial (3 dígitos), kebab-case para el nombre.
-- Ejemplos: `002-score-engine/`, `003-adapt-ia/`, `004-export-pdf/`.
+- Ejemplos: `002-score-engine/`, `003-adapt-ia/`, `004-export-pdf/`, `005-cv-pdf-docx-import/`, `007-constitution-v1.1.0/`.
 - `000-INDEX.md` (este archivo) es la única excepción al patrón numérico.
+- Las features de governance usan sufijo de versión: `NNN-constitution-vX.Y.Z/`.
 
 ## Links externos
 
-- **Constitution:** `BuildCv-api/.specify/memory/constitution.md` (v1.0.0, ley suprema)
+- **Constitution:** `BuildCv-api/.specify/memory/constitution.md` (v1.1.0, ley suprema)
 - **AGENTS.md:** `BuildCv-api/AGENTS.md` (tarjeta de identidad del sub-proyecto)
 - **Frontend counterpart:** `BuildCv-web/specs/` (mismo patrón, ID correlativo)
 - **Spec-kit oficial:** `BuildCv-api/.specify/` (CLI, scripts bash, plantillas)

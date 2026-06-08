@@ -1,6 +1,8 @@
 # Feature 002 — Score Engine (M0 — Scoring determinista)
 
 > **Status:** ✅ SHIPPED · **Cerrada:** 2026-06-08 · **Versión del motor:** 1.0.0
+> **Frontend counterpart:** [../../../BuildCv-web/specs/002-web-score-ui/](../../../BuildCv-web/specs/002-web-score-ui/)
+> **INDEX global:** [../000-INDEX.md](../000-INDEX.md)
 
 ## Resumen
 

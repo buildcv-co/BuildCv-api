@@ -5,6 +5,9 @@
 **Status**: Draft
 **Input**: User description: "Adaptar el CV a la vacante usando LLM con cero invención (Constitution Art. I)"
 
+> **Frontend counterpart:** [../../../BuildCv-web/specs/003-web-adapt-ui/](../../../BuildCv-web/specs/003-web-adapt-ui/)
+> **INDEX global:** [../000-INDEX.md](../000-INDEX.md)
+
 ---
 
 ## User Scenarios & Testing *(mandatory)*

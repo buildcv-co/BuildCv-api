@@ -5,6 +5,9 @@
 **Status**: Draft
 **Input**: User description: "Exportar el CV adaptado a PDF para descarga inmediata"
 
+> **Frontend counterpart:** [../../../BuildCv-web/specs/004-web-export-ui/](../../../BuildCv-web/specs/004-web-export-ui/)
+> **INDEX global:** [../000-INDEX.md](../000-INDEX.md)
+
 ---
 
 ## User Scenarios & Testing *(mandatory)*

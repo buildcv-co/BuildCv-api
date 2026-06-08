@@ -1,8 +1,11 @@
 using BuildCv.Application.Features.Adapt;
+using BuildCv.Application.Features.Export;
 using BuildCv.Domain.Adapt;
+using BuildCv.Domain.Export;
 using BuildCv.Domain.Lexicon;
 using BuildCv.Infrastructure.Ai;
 using BuildCv.Infrastructure.Lexicon;
+using BuildCv.Infrastructure.Pdf;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,11 +22,8 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // El diccionario de habilidades se carga una vez desde el YAML embebido y se
-        // comparte como dato inmutable (Singleton).
         services.AddSingleton<ISkillGazetteer>(_ => GazetteerLoader.LoadEmbedded());
 
-        // Adapt (M1) — v0 usa stub determinista; M1 reemplazará con AnthropicAiClient.
         services.AddSingleton<EntityExtractor>();
         services.AddSingleton<CrossEntityValidator>();
         services.AddSingleton<SeverityPolicy>();
@@ -35,6 +35,12 @@ public static class DependencyInjection
             sp.GetRequiredService<CrossEntityValidator>(),
             sp.GetRequiredService<SeverityPolicy>(),
             sp.GetRequiredService<PromptBuilder>()));
+
+        services.AddSingleton<ValidationGate>();
+        services.AddSingleton<IPdfGenerator, QuestPdfGenerator>();
+        services.AddSingleton<ExportPdfHandler>(sp => new ExportPdfHandler(
+            sp.GetRequiredService<IPdfGenerator>(),
+            sp.GetRequiredService<ValidationGate>()));
 
         return services;
     }

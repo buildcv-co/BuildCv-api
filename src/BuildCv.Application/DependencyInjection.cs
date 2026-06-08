@@ -1,4 +1,5 @@
 using BuildCv.Application.Features.Adapt;
+using BuildCv.Application.Features.Export;
 using BuildCv.Application.Features.Scoring;
 using BuildCv.Domain.Jobs;
 using BuildCv.Domain.Resumes;
@@ -11,12 +12,6 @@ namespace BuildCv.Application;
 
 public static class DependencyInjection
 {
-    /// <summary>
-    /// Registra los casos de uso de la capa de aplicación y los servicios de dominio
-    /// puros (normalizador, léxicos, matcher, analizadores, motor de puntaje), como
-    /// Singleton por ser inmutables y sin estado. El dominio es puro, por eso su
-    /// composición vive aquí y no en una capa con dependencias externas.
-    /// </summary>
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddSingleton<ITextNormalizer, SpanishTextNormalizer>();
@@ -32,9 +27,10 @@ public static class DependencyInjection
         services.AddSingleton<ScoreCvHandler>();
         services.AddSingleton<IValidator<ScoreCvCommand>, ScoreCvValidator>();
 
-        // Adapt (M1) — adapt validator + handler.
         services.AddSingleton<IValidator<AdaptCvCommand>, AdaptCvValidator>();
         services.AddSingleton<AdaptCvHandler>();
+
+        services.AddSingleton<IValidator<ExportPdfCommand>, ExportPdfValidator>();
 
         return services;
     }

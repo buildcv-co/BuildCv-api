@@ -83,6 +83,7 @@ app.UseRateLimiter();
 app.MapHealthEndpoints();
 app.MapScoringEndpoints();
 app.MapAdaptEndpoints();
+app.MapExportEndpoints();
 
 app.Run();
 

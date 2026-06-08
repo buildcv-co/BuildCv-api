@@ -7,6 +7,7 @@ public static class RateLimiting
 {
     public const string ScorePolicy = "score";
     public const string AiPolicy = "ai";
+    public const string ExportPolicy = "export";
 
     public static IServiceCollection AddAppRateLimiting(this IServiceCollection services)
     {
@@ -24,13 +25,23 @@ public static class RateLimiting
                         QueueLimit = 0,
                     }));
 
-            // Política "ai" — estricta: 5 adaptaciones por hora por IP (protege presupuesto).
             options.AddPolicy(AiPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
                     partitionKey: ClientKey(httpContext),
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = 5,
+                        Window = TimeSpan.FromHours(1),
+                        QueueLimit = 0,
+                    }));
+
+            // Política "export" — 20/h por IP. CPU-bound, no LLM-bound, más permisivo.
+            options.AddPolicy(ExportPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: ClientKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 20,
                         Window = TimeSpan.FromHours(1),
                         QueueLimit = 0,
                     }));

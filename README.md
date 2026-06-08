@@ -1,6 +1,6 @@
 # BuildCv · API (.NET)
 
-API del asistente de CV **BuildCv**: calcula un **puntaje determinista de coincidencia y legibilidad** entre un CV y una vacante — explicable, reproducible y **sin inventar nada** (el número no lo produce ningún LLM). Frontend en repo aparte: **[BuildCv-web](https://github.com/buildcv-co/BuildCv-web)**.
+API del asistente de CV **BuildCv**: calcula un **puntaje determinista de coincidencia y legibilidad** entre un CV y una vacante — explicable, reproducible y **sin inventar nada** (el número no lo produce ningún LLM). Frontend en directorio hermano: **[`../BuildCv-web/`](../BuildCv-web/)** (repositorio independiente).
 
 [![CI](https://github.com/buildcv-co/BuildCv-api/actions/workflows/ci.yml/badge.svg)](https://github.com/buildcv-co/BuildCv-api/actions/workflows/ci.yml) [![License: FSL-1.1-ALv2](https://img.shields.io/badge/license-FSL--1.1--ALv2-2ea44f)](LICENSE.md)
 

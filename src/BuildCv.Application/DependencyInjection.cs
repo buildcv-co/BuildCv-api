@@ -1,3 +1,4 @@
+using BuildCv.Application.Features.Adapt;
 using BuildCv.Application.Features.Scoring;
 using BuildCv.Domain.Jobs;
 using BuildCv.Domain.Resumes;
@@ -30,6 +31,10 @@ public static class DependencyInjection
 
         services.AddSingleton<ScoreCvHandler>();
         services.AddSingleton<IValidator<ScoreCvCommand>, ScoreCvValidator>();
+
+        // Adapt (M1) — adapt validator + handler.
+        services.AddSingleton<IValidator<AdaptCvCommand>, AdaptCvValidator>();
+        services.AddSingleton<AdaptCvHandler>();
 
         return services;
     }

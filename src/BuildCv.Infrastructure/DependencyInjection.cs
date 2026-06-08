@@ -1,4 +1,7 @@
+using BuildCv.Application.Features.Adapt;
+using BuildCv.Domain.Adapt;
 using BuildCv.Domain.Lexicon;
+using BuildCv.Infrastructure.Ai;
 using BuildCv.Infrastructure.Lexicon;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +22,19 @@ public static class DependencyInjection
         // El diccionario de habilidades se carga una vez desde el YAML embebido y se
         // comparte como dato inmutable (Singleton).
         services.AddSingleton<ISkillGazetteer>(_ => GazetteerLoader.LoadEmbedded());
+
+        // Adapt (M1) — v0 usa stub determinista; M1 reemplazará con AnthropicAiClient.
+        services.AddSingleton<EntityExtractor>();
+        services.AddSingleton<CrossEntityValidator>();
+        services.AddSingleton<SeverityPolicy>();
+        services.AddSingleton<PromptBuilder>();
+        services.AddSingleton<IAiClient, StubAiClient>();
+        services.AddSingleton<AdaptCvHandler>(sp => new AdaptCvHandler(
+            sp.GetRequiredService<IAiClient>(),
+            sp.GetRequiredService<EntityExtractor>(),
+            sp.GetRequiredService<CrossEntityValidator>(),
+            sp.GetRequiredService<SeverityPolicy>(),
+            sp.GetRequiredService<PromptBuilder>()));
 
         return services;
     }

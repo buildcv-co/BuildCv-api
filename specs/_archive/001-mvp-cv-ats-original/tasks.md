@@ -1,9 +1,16 @@
-# Tareas — BuildCv (MVP CV/ATS) por hitos
+# Tareas — BuildCv-api (MVP CV/ATS) por hitos
 
 > **Artefacto SDD:** `specs/001-mvp-cv-ats/tasks.md` — desglose **accionable y ordenado** de tareas para construir el MVP **completo** por hitos. Materializa `spec.md` (QUÉ/POR QUÉ), `plan.md` (CÓMO), `research.md` (decisiones D01–D20), `data-model.md` (entidades/persistencia) y `contracts/api-contract.md` (endpoints), bajo las reglas duras de `.specify/memory/constitution.md`.
 >
 > **Idioma:** documentación en español · identificadores de código en inglés.
 > **Fecha base:** 2026-06-06.
+>
+> **Estado por hito (2026-06-07):**
+> - **M0 — Setup ✅ DONE.** Solución .NET 4 src + 3 test, host con Serilog/ProblemDetails/OpenAPI+Scalar/versionado/health, Dockerfile, CI, **92/92 tests verdes** (77 Domain + 5 Application + 10 Api Integration), `dotnet format` limpio, `dotnet build -c Release` 0 warnings, imagen Docker arranca con `/health/live` y `/health/ready` en 200. Pendiente: deploy real en Render (T015, requiere cuenta del usuario).
+> - **M1 — Núcleo v0 LANZABLE ⏳ PENDING.** Motor TDD + keywords + `/score` + adaptación IA/streaming `/adapt` + guardarraíles + export PDF + frontend completo + rate limiting. **Hoy en código ya hay** el motor determinista (`ScoringEngine` v1.0.0), handler de scoring, validator, endpoint, rate limit `score` 20/min, y 77 tests del motor — **el camino feliz del puntaje funciona**. Pendiente: integración IA, streaming SSE, export PDF, frontend, gate ZDR (D19), deploy.
+> - **M2 — Cuentas + persistencia ⏳ PENDING** (v1).
+> - **M3 — Créditos + pagos ⏳ PENDING** (v1).
+> - **M4 — Legal + pulido + lanzamiento ⏳ PENDING** (v1).
 
 ---
 
@@ -36,9 +43,9 @@
 
 > **Objetivo:** "hola mundo" de punta a punta (Next.js → BFF → .NET → `/health`) desplegado, con CI verde. Sin FRs de producto aún (solo NFR-018 disponibilidad).
 >
-> **✅ ESTADO: COMPLETADO Y VERIFICADO (2026-06-06).** Solución .NET (4 `src` + 3 test) en `.slnx`, host ASP.NET Core con Serilog/ProblemDetails/OpenAPI+Scalar/versionado/health, BFF Next.js y CI. Verificado: build 0 warnings (warnings-as-errors), **8/8 tests**, `dotnet format` limpio, `next build`+lint verdes, **imagen Docker arranca con `/health/{live,ready}` → 200 en Producción**, y camino navegador→BFF→.NET probado. **Pendiente:** solo T015 (deploy real en Render+Vercel, requiere cuentas del usuario).
+> **✅ ESTADO: COMPLETADO Y VERIFICADO (2026-06-07).** Solución .NET (4 `src` + 3 test) en `.slnx`, host ASP.NET Core con Serilog/ProblemDetails/OpenAPI+Scalar/versionado/health, BFF Next.js ✅ **construido (directorio hermano `../BuildCv-web/`)** y CI. Verificado: build 0 warnings (warnings-as-errors), **92/92 tests verdes** (77 Domain + 5 Application + 10 Api Integration), `dotnet format` limpio, `dotnet list src/BuildCv.Domain package references` = 0 paquetes externos, **imagen Docker arranca con `/health/live` y `/health/ready` → 200**, y el motor de puntaje `ScoringEngine` v1.0.0 produce puntajes deterministas vía `POST /api/v1/score`. **Pendiente:** solo T015 (deploy real en Render, requiere cuenta del usuario). El frontend vive en directorio hermano.
 >
-> **Ajustes vs plan:** net10.0 (no net9), pnpm (no npm), FluentAssertions 7.0.0 (licencia libre), `.slnx`, puerto dev 5080, shadcn diferido a M1.
+> **Ajustes vs plan original:** net10.0 (no net9), `.slnx` (no `.sln`), `FluentAssertions 7.0.0` (licencia libre), puerto dev 5080, frontend en directorio hermano `BuildCv-web`.
 
 ### Andamiaje del repositorio y solución .NET
 
@@ -53,14 +60,14 @@
 
 - **T007** `BuildCv.Api/Program.cs`: DI por capa (`AddDomain()/AddApplication()/AddInfrastructure(config)`), **Serilog** (consola dev / JSON prod, **sin contenido**), `AddProblemDetails()` + `GlobalExceptionHandler` (`IExceptionHandler`), `AddOpenApi()` + **Scalar**, versionado `/api/v1` (`Asp.Versioning.Http`), `ForwardedHeadersOptions` (X-Forwarded-For). · *Ref:* D04, `plan.md §5.1/§5.2`, Art. VI. · *Deps:* T004
 - **T008** `HealthEndpoints` (`GET /health/live`, `GET /health/ready`; v0: self + presencia de `ANTHROPIC_API_KEY`). · *Ref:* `contracts §5.4`, NFR-018. · *Deps:* T007
-- **T009** `[P]` `backend/Dockerfile` (imagen `mcr.microsoft.com/dotnet/aspnet:9.0`, un solo servicio, portable). · *Ref:* D16, `plan.md §1.1`. · *Deps:* T001
+- **T009** `[P]` `backend/Dockerfile` (imagen `mcr.microsoft.com/dotnet/aspnet:10.0`, un solo servicio, portable). · *Ref:* D16, `plan.md §1.1`. · *Deps:* T001
 - **T016** `[P]` `(TEST)` Integración de salud con `WebApplicationFactory<Program>`: `/health/live` → 200, `/health/ready` → 200. · *Ref:* `plan.md §6.4`, NFR-018. · *Deps:* T005, T008
 
 ### Andamiaje Next.js + BFF
 
-- **T010** `[P]` Scaffold Next.js 15 (App Router, RSC, `strict: true`) + Tailwind + `shadcn/ui init`. · *Ref:* D13. · *Deps:* T001
+- **T010** `[P]` Scaffold Next.js 16 (App Router, RSC, `strict: true`) + Tailwind v4 + diseño custom. · *Ref:* D13. · *Deps:* T001
 - **T011** `[P]` `frontend/lib/copy/es.ts` (todos los textos es-CO) + `t()` + `Intl` (es-CO). · *Ref:* D13, NFR-016. · *Deps:* T010
-- **T012** `frontend/app/layout.tsx` (`<html lang="es-CO">`, Providers, `Toaster`, skip-link) + `globals.css` (Tailwind + tokens shadcn). · *Ref:* `plan.md §3`, NFR-012/016. · *Deps:* T010
+- **T012** `frontend/app/layout.tsx` (`<html lang="es-CO">`, Fraunces + Geist fonts, skip-link) + `globals.css` (Tailwind v4 + tema oscuro cálido). · *Ref:* `plan.md §3`, NFR-012/016. · *Deps:* T010
 - **T013** BFF Route Handlers **vacíos** (`app/api/{score,adapt,export,health}/route.ts`) que solo proxyean a `BACKEND_URL`. · *Ref:* D13/D14, `plan.md §3`. · *Deps:* T010
 
 ### CI y despliegue de prueba
@@ -79,11 +86,13 @@
 
 ---
 
-# M1 — Núcleo v0 LANZABLE *(el producto entero, gratis, sin cuentas)*
+# M1 — Núcleo v0 LANZABLE *(el producto entero, gratis, sin cuentas)* — ⏳ PENDING
 
 > **Objetivo:** pegar CV + vacante → **puntaje explicable** → **keywords** → **recomendaciones** → **adaptación en streaming** (cero invención) → **delta de mejora** → **exportar/copiar/compartir**; en móvil; con rate limiting; **sin cuentas ni guardado**; **DESPLEGADO**.
 > **Cubre:** FR-001..FR-043 (P0), FR-020 (opt.) · US-001..US-011, US-016 · NFR-001..003, 005, 006, 009..022, 025.
 > **Orden TDD estricto:** primero las pruebas del motor (léxicos, matching, golden cases, determinismo).
+>
+> **Estado (2026-06-07):** **parcial — submotor de puntaje listo (1a–1d ✅)**, adaptación IA / streaming SSE / export PDF / frontend / gate ZDR pendientes (1e–1k ⏳).
 
 ## 1a · NLP español + léxicos (TEST-FIRST, `BuildCv.Domain.Tests`)
 
@@ -200,7 +209,7 @@
 
 ---
 
-# M2 — Cuentas + persistencia *(v1 — primera capa comercial)*
+# M2 — Cuentas + persistencia *(v1 — primera capa comercial)* — ⏳ PENDING
 
 > **Objetivo:** Identity/JWT, EF Core + PostgreSQL, entidades v1, **historial**, **subir PDF/DOCX**. Incluye la **captura mínima de consentimiento en el registro** (puerta legal a la persistencia, FR-051; el aparato legal completo va en M4).
 > **Cubre:** FR-044, FR-045, FR-054, FR-055 (+ FR-051 captura en registro) · US-012, US-014 · NFR-004.
@@ -248,7 +257,7 @@
 
 ---
 
-# M3 — Créditos + pagos *(v1 — monetización)*
+# M3 — Créditos + pagos *(v1 — monetización)* — ⏳ PENDING
 
 > **Objetivo:** **libro mayor de créditos** auditable (1 adaptación = 1 crédito) + **Wompi** (Web Checkout con firma server-side + **webhook firmado e idempotente**). Única fuente de verdad = el webhook, **nunca** el redirect del navegador.
 > **Cubre:** FR-046, FR-047, FR-048, FR-049, FR-050 · US-013 · NFR-007, NFR-008 · M-07.
@@ -284,7 +293,7 @@
 
 ---
 
-# M4 — Legal + pulido + lanzamiento *(v1 — cierre y go-live)*
+# M4 — Legal + pulido + lanzamiento *(v1 — cierre y go-live)* — ⏳ PENDING
 
 > **Objetivo:** completar el cumplimiento **Habeas Data** (consentimiento, política, derechos ARCO/revocación), **a11y/móvil** final de v1, **métricas** y **landing**, y lanzar.
 > **Cubre:** FR-051 (completar), FR-052, FR-053 · US-015 · NFR-004, NFR-023, NFR-024, NFR-025 · M-01..M-07.

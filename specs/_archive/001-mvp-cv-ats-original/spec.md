@@ -7,6 +7,20 @@
 > **Idioma:** español (mercado Colombia, listo para LATAM). Los identificadores de código serán en inglés en los artefactos técnicos.
 > **Documento base:** formaliza y completa `PLANEACION.md`.
 
+> **Estado del milestone (2026-06-07):**
+> - **M0 ✅ DONE** — scaffolding limpio, build 0 warnings, 92 tests verdes.
+> - **M1-motor ✅ DONE** — score determinista (FR-001..FR-022, cascada C1–C5, gates, recomendaciones, formato JSON congelado).
+> - **M1-IA ⏳ PENDING** — adaptación con LLM, puertos `IAiClient`/`IPromptStore`, SSE.
+> - **M2 ⏳ PENDING** — parseo PDF/DOCX (`ICvParser`), export PDF (`IPdfExporter`).
+> - **M3 ⏳ PENDING** — cuentas, consent Ley 1581, Habeas Data.
+> - **M4 ⏳ PENDING** — pagos Wompi, créditos, webhooks.
+>
+> **Stack real (verificado en `src/`):**
+> - .NET 10 LTS (`global.json` 10.0.100, `rollForward: latestFeature`).
+> - Solución `BuildCv.slnx` (formato XML moderno, no `.sln`).
+> - Layout: `src/{BuildCv.Domain, BuildCv.Application, BuildCv.Infrastructure, BuildCv.Api}` y `tests/{BuildCv.Domain.Tests, BuildCv.Application.Tests, BuildCv.Api.IntegrationTests}`. **Sin carpetas `backend/` o `frontend/`**; el frontend Next.js vive en el directorio hermano `../BuildCv-web/` (repositorio independiente).
+> - **Endpoint implementado único:** `POST /api/v1/score`. Todo lo demás de este spec (adapt, export, auth, payments, webhooks, consent) es **aspiracional** hasta que un PR lo cierre.
+
 ---
 
 ## 1. Resumen e intención del producto
@@ -259,7 +273,7 @@
 
 > Descripción conceptual, **sin** detalles de base de datos. Estos nombres son **canónicos** y los reutilizan `data-model.md`, `contracts/`, `plan.md` y `tasks.md` sin cambios.
 
-- **CV (Hoja de Vida):** documento del candidato. Atributos conceptuales: texto/contenido, modo de entrada (texto pegado | archivo subido), secciones detectadas, habilidades detectadas, experiencias, datos de contacto.
+- **CV (Hoja de Vida):** documento del candidato. **En v0–M1 el input es solo `string CvText`** (texto pegado, 200..20.000 caracteres, validado por `ScoreCvValidator`). El análisis determinista (`CvAnalyzer`) produce `CvAnalysis { Profile: CvProfile, SectionsPresent, HasContact, HasExperience, ActionVerbCount, QuantifiedAchievementCount, WordCount, MaxSkillRepetition }`. El modo "archivo subido" (PDF/DOCX) llega en M2 vía el puerto `ICvParser` (⏳ pendiente). **En v0 no se persiste nada** (Art. III Constitución).
 - **Vacante:** descripción del puesto provista por el usuario. Atributos: texto/contenido, secciones detectadas (requisitos, responsabilidades, deseables, cargo/título).
 - **Requisito de Vacante:** unidad extraída de la vacante. Atributos: término canónico, categoría (habilidad dura, herramienta, habilidad blanda, keyword genérica), sección de origen, importancia/peso.
 - **Coincidencia de Keyword:** cruce entre un Requisito de Vacante y el CV. Atributos: requisito asociado, nivel de coincidencia (exacta, alias, raíz, relacionada, aproximada, sin coincidencia), ubicación en el CV (prominente | enterrada | ausente), crédito otorgado, evidencia.

@@ -5,6 +5,30 @@
 > **Idioma:** español (documentación) · identificadores de código en inglés.
 > **Fecha base:** 2026-06-06.
 > **Reglas duras (constitución):** (1) cero invención de la IA · (2) puntaje determinista y explicable sin LLM · (3) privacidad primero (v0 no persiste) · (4) encuadre honesto · (5) la entrada del usuario es DATO, no instrucciones · (6) el backend demuestra .NET profesional · (7) v0 lanzable sin fricción + test-first del motor.
+>
+> **Estado del plan (2026-06-07):**
+> - **M0 ✅ DONE** — scaffolding limpio, build 0 warnings, **92 tests verdes** (77 Domain + 5 Application + 10 Api IntegrationTests).
+> - **M1-motor ✅ DONE** — score determinista completo (FR-001..FR-022, cascada C1–C5, gates, recomendaciones, formato JSON congelado).
+> - **M1-IA ⏳ PENDING** — adaptación con LLM, puertos `IAiClient`/`IPromptStore`, SSE.
+> - **M2 ⏳ PENDING** — parseo PDF/DOCX (`ICvParser`), export PDF (`IPdfExporter`).
+> - **M3 ⏳ PENDING** — cuentas, consent Ley 1581, Habeas Data.
+> - **M4 ⏳ PENDING** — pagos Wompi, créditos, webhooks.
+>
+> **Stack y layout reales (verificados en `src/`):**
+> - **.NET 10 LTS** (`global.json` 10.0.100, `rollForward: latestFeature`).
+> - **Solución** `BuildCv.slnx` (formato XML moderno, no `.sln`).
+> - **Layout:** `src/{BuildCv.Domain, BuildCv.Application, BuildCv.Infrastructure, BuildCv.Api}` + `tests/{BuildCv.Domain.Tests, BuildCv.Application.Tests, BuildCv.Api.IntegrationTests}`. **No hay carpetas `backend/` ni `frontend/`**; este repo contiene solo el backend .NET. El frontend Next.js vive en el directorio hermano **`../BuildCv-web/`** (repositorio independiente).
+> - **CI:** `dotnet-version: '10.0.x'`, `dotnet build -c Release --no-restore`, `dotnet format --verify-no-changes`, `dotnet test -c Release --no-build --collect:"XPlat Code Coverage"`.
+> - **Docker:** `Dockerfile` multi-stage con imagen `mcr.microsoft.com/dotnet/aspnet:10.0`, expone `$PORT`.
+> - **Hosting v0:** Render (blueprint `render.yaml`, `Ai__ApiKey` con `sync: false`).
+>
+> **Capas implementadas hoy (jun-2026):**
+> - `BuildCv.Domain` — **PURO** (0 paquetes externos, sin IO/reloj/red). `Text/` (normalizer, stemmer, section-splitter, similarity, confusables), `Lexicon/` (gazetteer YAML), `Resumes/` (`CvAnalyzer`, `CvAnalysis`), `Jobs/` (`JobAnalyzer`, `Requirement`, `JobRequirementSet`), `Scoring/` (engine, matcher, scanner, components, recomendaciones, gates). `Common/Result.cs`.
+> - `BuildCv.Application` — **solo** `Features/Scoring/{ScoreCvCommand, ScoreCvHandler, ScoreCvValidator}` + `DependencyInjection.cs`. Puertos de IO **aún no introducidos** (M1+).
+> - `BuildCv.Infrastructure` — **solo** `Lexicon/skills.gazetteer.v1.yaml` (EmbeddedResource) + `DependencyInjection.cs`.
+> - `BuildCv.Api` — `Endpoints/{ScoringEndpoints, HealthEndpoints}`, `Contracts/{ScoreResponse, ScoreResponseMapper}`, `Errors/`, `Filters/`, `Health/`, `Program.cs`.
+>
+> **Endpoints implementados (3):** `POST /api/v1/score`, `GET /health/live`, `GET /health/ready`. **Todo lo demás de este plan es aspiracional** (incluidos los archivos de `Application/Abstractions/`, `Infrastructure/{Ai,Export,Parsing,Persistence,Payments}/`, y los endpoints `adapt/stream`, `export/pdf`, `auth/*`, `payments/*`, `webhooks/*`, `consent`, `me`, `cv/parse`) **hasta que un PR los introduzca**.
 
 ---
 
@@ -14,32 +38,44 @@
 
 | Componente | Lenguaje / Runtime | Versión | Notas |
 |---|---|---|---|
-| Backend (API + dominio + motor) | C# / .NET | **.NET 9** (`net9.0`) | `Nullable enable`, `LangVersion latest`, *warnings as errors* (ver `Directory.Build.props`) |
-| Frontend | TypeScript / Node | **Next.js 15** (App Router) · Node 20 LTS | RSC por defecto; `strict: true` en `tsconfig` |
-| Estilos / UI | Tailwind CSS + shadcn/ui | última estable | Tokens de tema vía CSS vars (D13) |
-| Infraestructura | Docker | imagen `mcr.microsoft.com/dotnet/aspnet:9.0` | Dockerizar desde el día 1 (D16) |
+| Backend (API + dominio + motor) | C# / .NET | **.NET 10 LTS** (`net10.0`) | `global.json` 10.0.100, `rollForward: latestFeature`; `Nullable enable`, `LangVersion latest`, *warnings as errors* (ver `Directory.Build.props`) |
+| Frontend ✅ | TypeScript / Node | **Next.js 16** (App Router) · Node 22 | RSC por defecto; `strict: true` en `tsconfig` (en directorio hermano `../BuildCv-web/`) |
+| Estilos / UI ✅ | Tailwind v4 + diseño custom | Fraunces + Geist, tema oscuro cálido | Diseño propio sin shadcn/ui (D13) |
+| Infraestructura | Docker | imagen `mcr.microsoft.com/dotnet/aspnet:10.0` | Multi-stage; respeta `$PORT` (Render) |
 
 ### 1.2 Dependencias clave (NuGet — backend)
 
-| Área | Paquete(s) | Hito | Decisión |
-|---|---|---|---|
-| IA (transporte) | `Anthropic` (SDK oficial C#) | M2 | D06, D07 |
-| IA (fallback) | `OpenRouterAiClient` sobre `HttpClient` (formato OpenAI-compat) | M2/M3 | D06 |
-| NLP español | `Lucene.Net.Analysis.Common` (4.8.0-beta), `F23.StringSimilarity` | M1 | D02 |
-| Resiliencia | `Microsoft.Extensions.Http.Resilience` (Polly v8) | M2 | D09 |
-| Validación | `FluentValidation`, `FluentValidation.DependencyInjectionExtensions` | M1 | D04 |
-| Logging | `Serilog.AspNetCore`, `Serilog.Sinks.Console` | M0 | D04 |
-| OpenAPI | `Microsoft.AspNetCore.OpenApi`, `Scalar.AspNetCore` | M0 | D04 |
-| Versionado API | `Asp.Versioning.Http` | M0 | D04 |
-| Export PDF | `QuestPDF` | M2 | D12 |
-| Parseo CV (v1) | `UglyToad.PdfPig` (PDF), `DocumentFormat.OpenXml` (DOCX) | M3 | D11 |
-| Persistencia (v1) | `Microsoft.EntityFrameworkCore`, `Npgsql.EntityFrameworkCore.PostgreSQL` | M3 | — |
-| Auth (v1) | `Microsoft.AspNetCore.Identity.*` + JWT (`Microsoft.AspNetCore.Authentication.JwtBearer`) | M3 | refuerza .NET |
-| Tests | `xunit`, `FluentAssertions`, `Microsoft.AspNetCore.Mvc.Testing`, `Testcontainers.PostgreSql` (v1) | M0+ | §6 |
+> **Leyenda:** ✅ instalado en disco (verificado en `src/<proyecto>/*.csproj` el 2026-06-07) · ⏳ planeado para el hito indicado.
 
-### 1.3 Dependencias clave (npm — frontend)
+| Área | Paquete(s) | Versión | Hito | Decisión |
+|---|---|---|---|---|
+| Versionado API | `Asp.Versioning.Http` | `10.0.0` ✅ | M0 ✅ | D04 |
+| OpenAPI | `Microsoft.AspNetCore.OpenApi` | `10.0.8` ✅ | M0 ✅ | D04 |
+| OpenAPI UI | `Scalar.AspNetCore` | `2.14.14` ✅ | M0 ✅ | D04 |
+| Logging | `Serilog.AspNetCore` | `10.0.0` ✅ | M0 ✅ | D04 |
+| Logging sink | `Serilog.Sinks.Console` | `6.1.1` ✅ | M0 ✅ | D04 |
+| Validación | `FluentValidation` | `12.1.1` ✅ | M1 ✅ | D04 |
+| DI abstractions | `Microsoft.Extensions.DependencyInjection.Abstractions` | `10.0.8` ✅ | M0 ✅ | D03 |
+| YAML (gazetteer) | `YamlDotNet` | `18.0.0` ✅ | M1 ✅ | D03 |
+| Tests | `xunit` | `2.9.3` ✅ | M0+ | §6 |
+| Tests | `xunit.runner.visualstudio` | `2.9.3` ✅ | M0+ | §6 |
+| Tests | `FluentAssertions` | `7.0.0` ✅ | M0+ | §6 |
+| Tests (integration) | `Microsoft.AspNetCore.Mvc.Testing` | transitivo ✅ | M1 ✅ | §6.4 |
+| IA (transporte) | `Anthropic` (SDK oficial C#) ⏳ | — | M1-IA | D06, D07 |
+| IA (fallback) | `OpenRouterAiClient` sobre `HttpClient` (formato OpenAI-compat) ⏳ | — | M1-IA | D06 |
+| NLP español | `Lucene.Net.Analysis.Common`, `F23.StringSimilarity` ⏳ | — | M1-IA | D02 (D02 base: stemmer y fuzzy ya implementados a mano en `Domain/Text/`) |
+| Resiliencia | `Microsoft.Extensions.Http.Resilience` (Polly v8) ⏳ | — | M1-IA | D09 |
+| Export PDF | `QuestPDF` ⏳ | — | M2 | D12 |
+| Parseo CV (v1) | `UglyToad.PdfPig` (PDF), `DocumentFormat.OpenXml` (DOCX) ⏳ | — | M2 | D11 |
+| Persistencia (v1) | `Microsoft.EntityFrameworkCore`, `Npgsql.EntityFrameworkCore.PostgreSQL` ⏳ | — | M3 | — |
+| Auth (v1) | `Microsoft.AspNetCore.Identity.*` + JWT ⏳ | — | M3 | refuerza .NET |
+| Testcontainers (v1) | `Testcontainers.PostgreSql` ⏳ | — | M3 | §6.4 |
 
-`next`, `react`, `react-dom`, `typescript`, `tailwindcss`, componentes `shadcn/ui` (radix primitives), `sonner` (toasts), `clsx` + `tailwind-merge`. **No** se incluyen en v0: Redux/Zustand/TanStack Query, `react-hook-form`/`zod` (diferidos a v1 con cuentas/checkout — D13). El parser SSE es propio (~40 líneas, D14).
+### 1.3 Dependencias clave (npm — frontend) ✅ directorio hermano
+
+> El frontend Next.js vive en el directorio hermano `../BuildCv-web/` (repositorio independiente); este repositorio no contiene dependencias npm.
+>
+> Implementado (Next.js 16, React 19, TypeScript 5, Tailwind v4, diseño custom sin shadcn/ui). Pendiente M1-IA: SDK Anthropic, QuestPDF (export PDF), prompts versionados. Parser SSE propio (~40 líneas).
 
 ### 1.4 Almacenamiento
 
@@ -96,10 +132,10 @@ La **misma imagen Docker** se promueve de Render/Azure sin cambios → criterio 
 
 ## 3. Estructura del proyecto
 
-**Monorepo** con dos artefactos desplegables (`backend/` en .NET, `frontend/` en Next.js), los artefactos SDD y la configuración de CI. Los prompts versionados viajan como **Embedded Resources** dentro del backend (compilados en el binario, no dependen del filesystem en producción — D06).
+> **Este repo contiene solo el backend .NET.** El frontend Next.js vive en el directorio hermano **`../BuildCv-web/`** (repositorio independiente). Los prompts versionados viajarán como **Embedded Resources** dentro del backend (M1-IA, D06) — el dominio no tiene IO.
 
 ```
-BuildCv/                                  # raíz del monorepo
+BuildCv-api/                              # raíz (solo backend .NET 10)
 ├── .specify/
 │   └── memory/
 │       └── constitution.md               # reglas duras del proyecto
@@ -115,184 +151,128 @@ BuildCv/                                  # raíz del monorepo
 │       └── tasks.md                       # tareas por hito M0–M4
 ├── PLANEACION.md                          # estrategia general (base)
 ├── README.md
+├── AGENTS.md                              # tarjeta de identidad del repo para agentes
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                         # build + format + test + coverage
+├── .opencode/
+│   ├── opencode.json                      # carga AGENTS.md + rules/ + skills/
+│   ├── rules/                             # arquitectura · seguridad · calidad · backend-dotnet
+│   ├── skills/                            # constitution-compliance · dotnet-tdd
+│   └── agents/                            # backend-dotnet · dotnet-qa
 │
-├── backend/                               # ───────── Solución .NET ─────────
-│   ├── BuildCv.sln
-│   ├── Directory.Build.props              # Nullable enable, warnings-as-errors, LangVersion
-│   ├── .editorconfig
-│   ├── Dockerfile                         # imagen portable (un solo servicio)
-│   ├── src/
-│   │   ├── BuildCv.Domain/                # NÚCLEO PURO — sin dependencias externas
-│   │   │   ├── Resumes/
-│   │   │   │   ├── Resume.cs               # secciones, skills, experiencias, contacto
-│   │   │   │   ├── ResumeSection.cs
-│   │   │   │   └── ExtractedSkill.cs
-│   │   │   ├── Jobs/
-│   │   │   │   ├── JobPosting.cs
-│   │   │   │   └── JobKeyword.cs           # término canónico + peso + categoría + sección
-│   │   │   ├── Scoring/
-│   │   │   │   ├── IScoringEngine.cs       # contrato del motor (vive en Domain)
-│   │   │   │   ├── ScoringEngine.cs        # ALGORITMO PURO, determinista, sin I/O (D01)
-│   │   │   │   ├── ScoreResult.cs          # puntaje global + banda + desglose + recomendaciones
-│   │   │   │   ├── ScoreBreakdown.cs       # por componente (C1..C5) + peso + medibilidad
-│   │   │   │   ├── ScoreComponent.cs       # enum C1 Match..C5 Longitud
-│   │   │   │   ├── Recommendation.cs       # "qué arreglar", priorizado (FR-021/022)
-│   │   │   │   ├── ScoreGate.cs            # compuertas/caps (FR-012)
-│   │   │   │   └── KeywordMatch.cs         # nivel de coincidencia + ubicación + crédito + evidencia
-│   │   │   ├── Text/
-│   │   │   │   ├── ITextNormalizer.cs
-│   │   │   │   ├── SpanishTextNormalizer.cs    # NFKC, protege técnicos, conserva Ñ (D02)
-│   │   │   │   ├── ISpanishStemmer.cs
-│   │   │   │   ├── SpanishLemmatizer.cs        # diccionario de lemas + fallback stem
-│   │   │   │   ├── SkillSynonymDictionary.cs   # alias canónicos (js=javascript…)
-│   │   │   │   └── ConfusableBlocklist.cs      # java⇎javascript, c⇎c#… (FR-017)
-│   │   │   ├── Lexicon/
-│   │   │   │   ├── SkillGazetteer.cs           # léxico versionado (cargado como dato)
-│   │   │   │   └── skills.gazetteer.v1.yaml    # Embedded Resource (versión sellada, FR-013)
-│   │   │   └── Common/
-│   │   │       └── Result.cs                   # Result<T> (errores de dominio sin excepciones)
-│   │   │
-│   │   ├── BuildCv.Application/            # CASOS DE USO — orquesta dominio + puertos
-│   │   │   ├── Abstractions/
-│   │   │   │   ├── IAiClient.cs            # PUERTO de IA (streaming, agnóstico de proveedor)
-│   │   │   │   ├── ICvParser.cs            # PUERTO de parseo (PDF/DOCX) — v1
-│   │   │   │   ├── IPdfExporter.cs         # PUERTO de export PDF (QuestPDF)
-│   │   │   │   └── IPromptStore.cs         # carga prompts versionados + sha256
-│   │   │   ├── Features/
-│   │   │   │   ├── Scoring/
-│   │   │   │   │   ├── ScoreCvCommand.cs   # input: cvText + jobText + locale
-│   │   │   │   │   ├── ScoreCvHandler.cs   # extracción + ScoringEngine (sin LLM)
-│   │   │   │   │   └── ScoreCvValidator.cs # FluentValidation (longitudes, no vacío)
-│   │   │   │   ├── Adaptation/
-│   │   │   │   │   ├── AdaptCvCommand.cs
-│   │   │   │   │   ├── IResumeAdaptationService.cs
-│   │   │   │   │   ├── ResumeAdaptationService.cs  # arma prompt + guardarraíles + streaming + buffer
-│   │   │   │   │   ├── AdaptationGuard.cs          # validación posterior "cero invención" (D06)
-│   │   │   │   │   ├── InventionValidator.cs       # whitelist vs entidades de salida + severidades
-│   │   │   │   │   └── AdaptCvValidator.cs
-│   │   │   │   ├── Keywords/
-│   │   │   │   │   ├── KeywordExtractor.cs         # extracción determinista (v0, sin LLM)
-│   │   │   │   │   ├── EntityExtractor.cs          # compartido motor↔guard (skills/empresas/métricas)
-│   │   │   │   │   └── KeywordMatchResult.cs
-│   │   │   │   └── Export/
-│   │   │   │       └── ExportPdfHandler.cs
-│   │   │   ├── Prompts/                    # PROMPTS VERSIONADOS (Embedded Resources, D06)
-│   │   │   │   ├── adapt_cv.system.v1.md   # guardarraíles + few-shots (> 2048 tokens → caché)
-│   │   │   │   ├── adapt_cv.fewshots.v1.json
-│   │   │   │   ├── keywords.system.v1.md   # (refuerzo Haiku, v0.1+)
-│   │   │   │   ├── judge.system.v1.md      # juez de borde (Haiku)
-│   │   │   │   ├── manifest.json           # task → {system, model, thinking, temp, maxTokens}
-│   │   │   │   └── PromptCatalog.cs
-│   │   │   └── Configuration/
-│   │   │       └── AiOptions.cs            # model IDs, effort, MaxTokens, temperatura por modelo
-│   │   │
-│   │   ├── BuildCv.Infrastructure/         # IMPLEMENTA los puertos — habla con el mundo
-│   │   │   ├── Ai/
-│   │   │   │   ├── AnthropicAiClient.cs    # IAiClient con SDK oficial + streaming (D06/D07)
-│   │   │   │   ├── OpenRouterAiClient.cs   # fallback (HttpClient, formato OpenAI)
-│   │   │   │   ├── AiClientSelector.cs     # primario vs fallback por config/health
-│   │   │   │   └── AiResilience.cs         # pipeline Polly (retry→timeout→breaker) (D09)
-│   │   │   ├── Export/
-│   │   │   │   └── QuestPdfExporter.cs     # IPdfExporter (D12)
-│   │   │   ├── Parsing/                    # ►►► v1 (M3) ◄◄◄
-│   │   │   │   ├── PdfPigCvParser.cs       # PDF (D11)
-│   │   │   │   └── OpenXmlCvParser.cs      # DOCX (D11)
-│   │   │   ├── Persistence/                # ►►► v1 (M3) ÚNICAMENTE ◄◄◄
-│   │   │   │   ├── BuildCvDbContext.cs     # EF Core + PostgreSQL
-│   │   │   │   ├── Repositories/
-│   │   │   │   └── Migrations/
-│   │   │   ├── Payments/                   # ►►► v1 (M4) ◄◄◄
-│   │   │   │   ├── IPaymentProvider.cs     # createCheckout/verifyWebhook/getStatus (D15)
-│   │   │   │   └── WompiProvider.cs        # firma SHA256 server-side + webhook idempotente
-│   │   │   └── DependencyInjection.cs      # AddInfrastructure(IConfiguration)
-│   │   │
-│   │   └── BuildCv.Api/                    # HOST ASP.NET Core — solo composición
-│   │       ├── Endpoints/
-│   │       │   ├── ScoringEndpoints.cs     # MapGroup /api/v1/score
-│   │       │   ├── AdaptationEndpoints.cs  # MapGroup /api/v1/adapt/stream (SSE)
-│   │       │   ├── ExportEndpoints.cs      # MapGroup /api/v1/export/pdf
-│   │       │   ├── PaymentEndpoints.cs     # /api/v1/payments + webhook (v1, M4)
-│   │       │   └── HealthEndpoints.cs      # /health/live, /health/ready
-│   │       ├── Filters/
-│   │       │   └── ValidationFilter.cs     # endpoint filter genérico → FluentValidation
-│   │       ├── Errors/
-│   │       │   └── GlobalExceptionHandler.cs   # IExceptionHandler → ProblemDetails
-│   │       ├── Streaming/
-│   │       │   └── ServerSentEvents.cs     # helper SSE (data:\n\n + flush + encode)
-│   │       ├── Security/
-│   │       │   └── RateLimiting.cs         # políticas score/adapt + GlobalLimiter (D10)
-│   │       ├── appsettings.json
-│   │       ├── appsettings.Development.json
-│   │       └── Program.cs                  # DI, middleware, endpoints, ForwardedHeaders
-│   └── tests/
-│       ├── BuildCv.Domain.Tests/          # TDD del motor (xUnit + FluentAssertions)
-│       │   ├── Scoring/
-│       │   │   ├── ScoringEngineTests.cs
-│       │   │   ├── DeterminismTests.cs     # misma entrada ⇒ mismo puntaje (FR-006)
-│       │   │   └── GoldenCases/            # pares (CV, vacante) + ScoreResult esperado
-│       │   └── Text/
-│       │       ├── SpanishTextNormalizerTests.cs   # año≠ano, conserva Ñ, protege c#/.net
-│       │       └── ConfusableBlocklistTests.cs     # java⇎javascript
-│       ├── BuildCv.Application.Tests/      # casos de uso con FakeAiClient (sin red/tokens)
-│       │   ├── ResumeAdaptationServiceTests.cs
-│       │   └── InventionValidatorTests.cs  # detecta skill inventada
-│       └── BuildCv.Api.IntegrationTests/   # WebApplicationFactory<Program>
-│           ├── CustomWebApplicationFactory.cs   # sustituye IAiClient por FakeAiClient
-│           ├── ScoringEndpointTests.cs
-│           ├── AdaptationStreamingTests.cs  # framing SSE, event: done
-│           └── RateLimitTests.cs            # 429 + Retry-After
+├── BuildCv.slnx                           # solución (formato XML moderno, no .sln)
+├── Directory.Build.props                  # Nullable, warnings-as-errors, LangVersion
+├── Directory.Packages.props               # versiones NuGet centralizadas
+├── global.json                            # SDK .NET 10.0.100, rollForward: latestFeature
+├── .editorconfig                          # estilo (4 espacios .cs, 2 en .json/.yml)
+├── Dockerfile                             # multi-stage, mcr.microsoft.com/dotnet/aspnet:10.0
+├── render.yaml                            # blueprint Render (Docker, env Ai__ApiKey sync:false)
 │
-└── frontend/                              # ───────── App Next.js 15 ─────────
-    ├── app/
-    │   ├── layout.tsx                      # <html lang="es-CO">, Providers, Toaster, skip-link
-    │   ├── globals.css                     # Tailwind base + tokens shadcn
-    │   ├── page.tsx                        # Landing (Server Component, SEO)
-    │   ├── opengraph-image.tsx             # OG dinámica antes/después
-    │   ├── robots.ts · sitemap.ts · manifest.ts
-    │   ├── (marketing)/
-    │   │   ├── como-funciona/page.tsx
-    │   │   ├── privacidad/page.tsx         # "No guardamos tu CV" (copy condicionado a ZDR)
-    │   │   └── preguntas-frecuentes/page.tsx
-    │   ├── analizar/
-    │   │   ├── page.tsx                     # Server shell + <Analyzer/> (client)
-    │   │   └── loading.tsx
-    │   └── api/                            # BFF: Route Handlers (same-origin, ocultan backend)
-    │       ├── score/route.ts              # POST → proxy a .NET /api/v1/score
-    │       ├── adapt/route.ts              # POST → passthrough SSE (runtime Node, no-buffer)
-    │       ├── export/route.ts             # POST → proxy a .NET /api/v1/export/pdf (blob)
-    │       └── health/route.ts
-    ├── components/
-    │   ├── ui/                             # shadcn/ui generados
-    │   ├── layout/                         # site-header, site-footer, skip-to-content
-    │   ├── landing/                        # hero, before-after-showcase, privacy-banner, faq
-    │   └── analyzer/
-    │       ├── analyzer.tsx                # orquestador client (AnalyzerContext)
-    │       ├── input-step.tsx · paste-area.tsx
-    │       ├── score-dashboard.tsx
-    │       ├── score-gauge.tsx             # badge global circular SVG (PROPIO)
-    │       ├── component-bars.tsx · component-bar.tsx   # PROPIO (peso + valor + a11y)
-    │       ├── keyword-chips.tsx           # presentes/faltantes (PROPIO)
-    │       ├── fix-list.tsx                # "Qué arreglar" priorizado
-    │       ├── before-after.tsx · streaming-output.tsx  # aria-live token a token
-    │       ├── honesty-notice.tsx          # evento honesty (sin invención / advertencia)
-    │       ├── improvement-delta.tsx       # 62 → 89 (+27) animado
-    │       ├── action-bar.tsx · share-improvement.tsx   # PDF/Copiar/Compartir (sin PII)
-    │       └── rate-limit-notice.tsx · empty-states.tsx
-    ├── lib/
-    │   ├── api/                            # client.ts, sse.ts (parser propio), types.ts, endpoints.ts
-    │   ├── state/                          # analyzer-reducer.ts (puro, testeable), context, use-adapt-stream.ts
-    │   ├── copy/                           # es.ts (todos los textos) + t() + Intl (es-CO)
-    │   ├── seo/                            # metadata.ts + JSON-LD
-    │   └── utils/                          # cn.ts, format.ts, validation.ts, demo-data.ts (.NET)
-    ├── middleware.ts                       # rate-limit de borde + headers seguridad + Turnstile
-    ├── next.config.ts · tailwind.config.ts · tsconfig.json
-    └── package.json
+├── src/
+│   ├── BuildCv.Domain/                    # PURO: 0 paquetes externos, sin IO/reloj/red
+│   │   ├── Common/Result.cs               # Result<T> (errores de dominio sin excepciones)
+│   │   ├── Text/
+│   │   │   ├── ITextNormalizer.cs         # + SpanishTextNormalizer (NFKC, protege técnicos, conserva Ñ, D02)
+│   │   │   ├── ISpanishStemmer.cs         # + SpanishLightStemmer (D02)
+│   │   │   ├── SectionSplitter.cs         # heurística de secciones (contacto, experiencia, etc.)
+│   │   │   ├── StringSimilarity.cs        # Jaro-Winkler / Levenshtein normalizado (D02)
+│   │   │   └── ConfusableBlocklist.cs     # java⇎javascript, c⇎c#, node⇎node.js (FR-017)
+│   │   ├── Lexicon/
+│   │   │   ├── ISkillGazetteer.cs         # puerto: lectura del gazetteer
+│   │   │   ├── SkillGazetteer.cs          # adaptador: YamlDotNet carga EmbeddedResource
+│   │   │   └── SkillEntry.cs              # record: Id, Canonical, Category, Aliases, Implies, Related, Broader, ConfusableWith
+│   │   ├── Resumes/
+│   │   │   ├── CvAnalyzer.cs              # orquesta normalizer + scanner + section-splitter
+│   │   │   └── CvAnalysis.cs              # record: Profile + SectionsPresent + HasContact + HasExperience + ActionVerbCount + QuantifiedAchievementCount + WordCount + MaxSkillRepetition
+│   │   ├── Jobs/
+│   │   │   ├── JobAnalyzer.cs             # extrae Requirement[] + contextHash (FR-031)
+│   │   │   ├── Requirement.cs             # record: CanonicalId, Display, Category, Section, Weight (+ enum RequirementSection)
+│   │   │   └── JobRequirementSet.cs       # record: Requirements + ContextHash
+│   │   └── Scoring/
+│   │       ├── IScoringEngine.cs          # contrato puro
+│   │       ├── ScoringEngine.cs           # ALGORITMO PURO, determinista, sin I/O, Version="1.0.0" (D01)
+│   │       ├── ISkillMatcher.cs           # + SkillMatcher (cascada C1: alias → C2: stem → C3: related → C4: fuzzy con blocklist)
+│   │       ├── SkillScanner.cs            # detección de skills en texto del CV
+│   │       ├── CvProfile.cs               # record: SkillPlacements, Tokens, Stems
+│   │       ├── ScoreResult.cs             # record + enums ComponentId (C1..C5) y ScoreBand (Bajo/Medio/Bueno/Fuerte)
+│   │       │                                # contiene: Overall, Band, Disclaimer, Components, Keywords, Recommendations, FormatIssues, GatesApplied, EngineVersion, LexiconVersion, ContextHash
+│   │       ├── MatchResult.cs             # record + enums MatchTier (None/Exact/Alias/Lemma/Related/Fuzzy) y Placement (Prominent/Buried/NotFound)
+│   │       ├── KeywordAnalysis.cs         # KeywordView + KeywordAnalysis (present/missing/partial)
+│   │       └── Recommendation.cs          # record + enum RecommendationType (Surface/Rewrite/AddMetric/FixFormat/Learn)
+│   │
+│   ├── BuildCv.Application/
+│   │   ├── DependencyInjection.cs         # AddApplication: registra IScoringEngine y los servicios de dominio
+│   │   └── Features/Scoring/
+│   │       ├── ScoreCvCommand.cs          # record: (string CvText, string JobText) — sin locale
+│   │       ├── ScoreCvHandler.cs          # orquesta: CvAnalyzer + JobAnalyzer + ScoringEngine
+│   │       └── ScoreCvValidator.cs        # FluentValidation: CV 200..20000, Job 100..20000, NotBeIdentical
+│   │
+│   ├── BuildCv.Infrastructure/
+│   │   ├── DependencyInjection.cs         # AddInfrastructure: registra ISkillGazetteer con YAML embebido
+│   │   └── Lexicon/
+│   │       └── skills.gazetteer.v1.yaml   # EmbeddedResource, inmutable, "v1" sellado en ScoreResult (FR-013)
+│   │
+│   └── BuildCv.Api/
+│       ├── Program.cs                     # composition root: AddApiVersioning, AddOpenApi, Scalar (solo Development), Serilog, RateLimit, HealthChecks
+│       ├── Endpoints/
+│       │   ├── ScoringEndpoints.cs        # MapGroup /api/v{version}/score, RequireRateLimiting("deterministic")
+│       │   └── HealthEndpoints.cs         # /health/live, /health/ready
+│       ├── Contracts/
+│       │   ├── ScoreResponse.cs           # DTOs (PascalCase en C# → camelCase en JSON)
+│       │   └── ScoreResponseMapper.cs     # mapea ScoreResult → ScoreResponse (enums → strings honestos)
+│       ├── Errors/
+│       │   └── GlobalExceptionHandler.cs  # IExceptionHandler → ProblemDetails (RFC 9457)
+│       ├── Filters/
+│       │   └── ValidationFilter.cs        # endpoint filter genérico FluentValidation → 400
+│       ├── Health/
+│       │   └── AiConfigHealthCheck.cs     # verifica presencia de Ai:ApiKey (no la muestra)
+│       ├── appsettings.json               # Logging, Cors, Ai (vacio en dev)
+│       └── appsettings.Development.json   # (gitignored, local)
+│
+└── tests/
+    ├── BuildCv.Domain.Tests/              # 77 tests: TDD del motor (xUnit + FluentAssertions)
+    │   ├── Text/
+    │   │   ├── SpanishTextNormalizerTests.cs   # año≠ano, conserva Ñ, protege c#/.net/node.js
+    │   │   ├── SpanishLightStemmerTests.cs
+    │   │   ├── SectionSplitterTests.cs
+    │   │   ├── StringSimilarityTests.cs        # Jaro-Winkler, Levenshtein
+    │   │   └── ConfusableBlocklistTests.cs     # java⇎javascript, postgres≡postgresql
+    │   ├── Lexicon/
+    │   │   └── SkillGazetteerTests.cs
+    │   ├── Resumes/
+    │   │   └── CvAnalyzerTests.cs
+    │   ├── Jobs/
+    │   │   └── JobAnalyzerTests.cs
+    │   └── Scoring/
+    │       ├── ScoringEngineTests.cs      # C1..C5, compuertas, renormalización
+    │       ├── ScoringEngineDeterminismTests.cs  # misma entrada ⇒ mismo score (FR-006)
+    │       ├── SkillMatcherTests.cs       # cascada + blocklist
+    │       ├── SkillScannerTests.cs
+    │       └── GoldenCases/               # pares (CV, vacante) con ScoreResult esperado
+    ├── BuildCv.Application.Tests/         # 5 tests: handler + validator
+    │   └── Features/Scoring/
+    │       ├── ScoreCvHandlerTests.cs
+    │       └── ScoreCvValidatorTests.cs
+    └── BuildCv.Api.IntegrationTests/      # 10 tests: WebApplicationFactory<Program>
+        ├── BuildCvApiFactory.cs           # arranca el host en memoria
+        ├── ScoringEndpointTests.cs        # 200 OK, 400 (cvText corto, jobText corto, idénticos), shape JSON
+        ├── ScoreResponseShapeTests.cs     # alineación con ScoreResponse (camelCase, enums, GatesApplied)
+        └── HealthEndpointTests.cs         # /health/live 200, /health/ready
 ```
 
-**Notas de hito:** v0 (M0–M2) compila y despliega **sin** `Persistence/`, `Parsing/` ni `Payments/`, sin auth. `Domain` + `Application` (sin `ICvParser`/repos) + `Infrastructure.Ai`/`Infrastructure.Export` + `Api` + el frontend completo son suficientes para lanzar.
+### 3.1 Lo que NO está todavía (planeado, bloqueado por hitos futuros)
+
+> **Esta lista describe el diseño aspiracional de v1.** Cada bloque entra al repo en el hito indicado (M1-IA / M2 / M3 / M4) mediante su PR correspondiente.
+
+- `BuildCv.Application/Abstractions/{IAiClient, ICvParser, IPdfExporter, IPromptStore}.cs` (M1-IA, M2) — puertos de IO.
+- `BuildCv.Application/Features/{Adaptation, Keywords, Export}/*` (M1-IA, M2).
+- `BuildCv.Application/Prompts/{adapt_cv.system.v1.md, adapt_cv.fewshots.v1.json, manifest.json, …}` (M1-IA) — prompts como Embedded Resources con `sha256`.
+- `BuildCv.Application/Configuration/AiOptions.cs` (M1-IA) — model IDs, effort, MaxTokens, temperatura.
+- `BuildCv.Infrastructure/{Ai, Export, Parsing, Persistence, Payments}/*` (M1-IA, M2, M3, M4).
+- `BuildCv.Api/Endpoints/{AdaptationEndpoints, ExportEndpoints, PaymentEndpoints, AuthEndpoints, ConsentEndpoints, WebhooksEndpoints, MeEndpoints, CvParseEndpoints}.cs` (M1-IA, M2, M3, M4).
+- `BuildCv.Api/{Filters, Streaming, Security, Habeas}/*` extendidos (M1-IA, M3).
+- Repositorio `BuildCv-web` (Next.js 16 + BFF Route Handlers + máquina de estados `useReducer` + SSE passthrough) — directorio hermano, repositorio independiente.
 
 ---
 
@@ -313,7 +293,7 @@ BuildCv/                                  # raíz del monorepo
 - `Infrastructure` implementa los puertos (SDK Anthropic, QuestPDF; en v1 EF Core, PdfPig/OpenXML, Wompi).
 - `Api` solo compone (DI + endpoints Minimal API) y no contiene lógica de negocio.
 
-**Estilo de API (D04):** Minimal APIs con `MapGroup` por feature, `TypedResults`, *endpoint filters* para validación, OpenAPI integrado de .NET 9 + UI Scalar, versionado por segmento (`/api/v1/...`). DI nativo con un método de registro por capa (`AddDomain()` / `AddApplication()` / `AddInfrastructure(config)`) encadenados en `Program.cs`. Sin MediatR/CQRS/AutoMapper en v0 (D05).
+**Estilo de API (D04):** Minimal APIs con `MapGroup` por feature, `TypedResults`, *endpoint filters* para validación, OpenAPI integrado + UI Scalar, versionado por segmento (`/api/v1/...`). DI nativo con un método de registro por capa (`AddDomain()` / `AddApplication()` / `AddInfrastructure(config)`) encadenados en `Program.cs`. Sin MediatR/CQRS/AutoMapper en v0 (D05).
 
 **Flujo extremo a extremo (v0):**
 
@@ -335,8 +315,8 @@ Frontend /analizar (máquina de estados useReducer)
 ```csharp
 public interface IScoringEngine
 {
-    // Entradas ya normalizadas; salida explicable. Sin async: es CPU puro.
-    ScoreResult Evaluate(Resume resume, JobPosting job);
+    // Entradas ya analizadas; salida explicable. Sin async: es CPU puro.
+    ScoreResult Evaluate(CvAnalysis cv, JobRequirementSet job);
 }
 ```
 
@@ -467,12 +447,13 @@ Propagación obligatoria: endpoint (`HttpContext.RequestAborted`) → handler/se
 
 ### 6.2 Contract tests (motor↔frontend, SSE, ProblemDetails)
 
-- Los DTO de respuesta (`ScoreResponse`, `AdaptEvent`, `ProblemDetails`) se validan contra `contracts/api-contract.md`: campos, nombres honestos (`MatchScore`/`ReadabilityScore`), eventos SSE `meta/token/honesty/done/error`, headers `X-RateLimit-*` + `Retry-After`, errores `application/problem+json`. El documento OpenAPI generado por .NET 9 es la fuente del cliente TS y debe permanecer sincronizado.
-- **Frontend:** tests del `analyzer-reducer` (transiciones válidas idle→…→done, imposible quedar inconsistente) y del parser `lib/api/sse` (framing `\n\n`, líneas `event:`/`data:`, comentarios `:`), y del mapeo de ProblemDetails (D13/D14).
+- Los DTO de respuesta (`ScoreResponse`, `AdaptEvent` ⏳, `ProblemDetails`) se validan contra `contracts/api-contract.md`: campos (`overallScore`, `band`, `honestyNotice`, `engineVersion`, `lexiconVersion`, `contextId`, `components[]`, `keywordAnalysis.{present,missing,partial}`, `recommendations[]`, `formatIssues[]`, `gatesApplied[]`), eventos SSE `meta/token/honesty/done/error` ⏳, headers `X-RateLimit-*` + `Retry-After`, errores `application/problem+json`. El documento OpenAPI generado por .NET 10 es la fuente del cliente TS y debe permanecer sincronizado.
+- **Frontend ⏳ (repo `BuildCv-web`):** tests del `analyzer-reducer` (transiciones válidas idle→…→done, imposible quedar inconsistente) y del parser `lib/api/sse` (framing `\n\n`, líneas `event:`/`data:`, comentarios `:`), y del mapeo de ProblemDetails (D13/D14).
 
 ### 6.3 Casos de uso (`BuildCv.Application.Tests`)
 
-- `FakeAiClient : IAiClient` emite un `IAsyncEnumerable` fijo → prueba `ResumeAdaptationService` y, sobre todo, `InventionValidator`/`AdaptationGuard` (un CV adaptado con una skill inventada **debe** detectarse) **sin gastar tokens ni red**.
+- En **M0–M1**: los 5 tests cubren el `ScoreCvHandler` y `ScoreCvValidator` (entrada, normalización, validación de longitudes, identidad cvText == jobText, scoring end-to-end con el motor real). El handler no depende de IO externo.
+- **M1-IA ⏳:** `FakeAiClient : IAiClient` emite un `IAsyncEnumerable` fijo → prueba `ResumeAdaptationService` y, sobre todo, `InventionValidator`/`AdaptationGuard` (un CV adaptado con una skill inventada **debe** detectarse) **sin gastar tokens ni red**.
 
 ### 6.4 Integración (`BuildCv.Api.IntegrationTests`)
 
@@ -504,11 +485,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
-        with: { dotnet-version: '9.0.x' }
-      - run: dotnet restore backend/BuildCv.sln
-      - run: dotnet build backend/BuildCv.sln --no-restore -c Release
-      - run: dotnet format backend/BuildCv.sln --verify-no-changes   # estilo (.editorconfig)
-      - run: dotnet test backend/BuildCv.sln --no-build -c Release --collect:"XPlat Code Coverage"
+        with: { dotnet-version: '10.0.x' }
+      - run: dotnet restore BuildCv.slnx
+      - run: dotnet build BuildCv.slnx --no-restore -c Release
+      - run: dotnet format BuildCv.slnx --verify-no-changes   # estilo (.editorconfig)
+      - run: dotnet test BuildCv.slnx --no-build -c Release --collect:"XPlat Code Coverage"
 ```
 
 - Job separado para el frontend (`npm ci` + `npm run lint` + `npm test` + `next build`).
@@ -524,7 +505,7 @@ jobs:
 **Objetivo:** esqueleto end-to-end desplegado ("hola mundo" de punta a punta).
 - Solución .NET (4 proyectos + 3 de test), `Directory.Build.props`, `.editorconfig`, Dockerfile (D03).
 - `Program.cs`: DI por capa, Serilog, ProblemDetails + `IExceptionHandler`, OpenAPI/Scalar, versionado `/api/v1`, ForwardedHeaders, HealthChecks (`/health/live`, `/health/ready`) (D04).
-- Scaffold Next.js 15 + Tailwind + shadcn/ui + `lib/copy/es.ts` + BFF Route Handlers vacíos (D13).
+- Scaffold Next.js 16 + Tailwind v4 + diseño custom + `lib/copy/es.ts` + BFF Route Handlers vacíos (D13).
 - CI GitHub Actions (build + format + test); deploy de prueba Render/Railway + Vercel (D16).
 - **Entrega:** infra; sin FRs de producto aún.
 

@@ -7,28 +7,36 @@
 > **Fecha base:** 2026-06-06 · **Versión del contrato:** `v1` (HTTP). *(v0/v1 del producto son hitos internos; el contrato HTTP nace en `v1`.)*
 >
 > **Leyenda de hito por endpoint:** **[v0]** = hito lanzable sin cuentas · **[v1]** = hito comercial (cuentas/créditos/pagos/legal/archivos).
+>
+> **Estado del contrato (2026-06-07):**
+> - **§5.1 ✅ implementado** — `POST /api/v1/score` está en código; el shape JSON está congelado y los tests de integración (`BuildCv.Api.IntegrationTests`) lo verifican contra `src/BuildCv.Api/Contracts/ScoreResponse.cs`.
+> - **§5.2, §5.3, §6 (auth/credits/payments/webhooks/consent/cv/parse/me) ⏳ planeados** — no existen aún en código. Llegan con M1-IA, M2, M3 y M4.
+> - **Convención de nombres:** los records C# en `src/BuildCv.Api/Contracts/` están en `PascalCase`; ASP.NET Core (System.Text.Json por defecto) los serializa en JSON como `camelCase`. Este doc muestra el **wire format (camelCase)**.
 
 ---
 
 ## 0. Índice de endpoints
 
-| Hito | Método | Ruta | Propósito | FR principales |
-|---|---|---|---|---|
-| v0 | `POST` | `/api/v1/score` | Análisis determinista (puntaje + keywords + recomendaciones) | FR-005..FR-019, FR-021, FR-022 |
-| v0 | `POST` | `/api/v1/adapt/stream` | Adaptación con IA en streaming SSE + verificación de honestidad | FR-023..FR-030 |
-| v0 | `POST` | `/api/v1/export/pdf` | Exportar CV adaptado a PDF | FR-033 |
-| v0 | `GET`  | `/health/live` · `/health/ready` | Liveness / readiness | NFR-018 |
-| v1 | `POST` | `/api/v1/auth/register` | Crear cuenta | FR-044, FR-051 |
-| v1 | `POST` | `/api/v1/auth/login` | Iniciar sesión (JWT) | FR-044 |
-| v1 | `POST` | `/api/v1/auth/refresh` | Renovar token de acceso | FR-044 |
-| v1 | `GET`  | `/api/v1/credits` | Saldo y movimientos de créditos | FR-046 |
-| v1 | `GET`  | `/api/v1/adaptations` | Historial de adaptaciones | FR-045 |
-| v1 | `GET`  | `/api/v1/adaptations/{id}` | Detalle de una adaptación guardada | FR-045 |
-| v1 | `POST` | `/api/v1/payments/wompi/checkout` | Iniciar compra de créditos (firma server-side) | FR-047, FR-049 |
-| v1 | `POST` | `/api/v1/webhooks/wompi` | Confirmación de pago firmada e idempotente | FR-048 |
-| v1 | `POST` | `/api/v1/consent` · `POST /api/v1/consent/revoke` | Consentimiento de datos y revocación | FR-051, FR-052 |
-| v1 | `GET`  | `/api/v1/me/data` · `DELETE /api/v1/me` | Derechos ARCO (acceso / supresión) | FR-052 |
-| v1 | `POST` | `/api/v1/cv/parse` | Subir y extraer CV (PDF/DOCX) | FR-054, FR-055 |
+> **Implementados (jun-2026, ✅):** 3 — `POST /api/v1/score`, `GET /health/live`, `GET /health/ready`.
+> **Planeados (⏳):** 13 — adaptación, export, auth, credits, payments, webhooks, consent, me, cv/parse, etc.
+
+| Estado | Hito | Método | Ruta | Propósito | FR principales |
+|---|---|---|---|---|---|
+| ✅ | v0 | `POST` | `/api/v1/score` | Análisis determinista (puntaje + keywords + recomendaciones) | FR-005..FR-019, FR-021, FR-022 |
+| ⏳ | v0 | `POST` | `/api/v1/adapt/stream` | Adaptación con IA en streaming SSE + verificación de honestidad | FR-023..FR-030 |
+| ⏳ | v0 | `POST` | `/api/v1/export/pdf` | Exportar CV adaptado a PDF | FR-033 |
+| ✅ | v0 | `GET`  | `/health/live` · `/health/ready` | Liveness / readiness | NFR-018 |
+| ⏳ | v1 | `POST` | `/api/v1/auth/register` | Crear cuenta | FR-044, FR-051 |
+| ⏳ | v1 | `POST` | `/api/v1/auth/login` | Iniciar sesión (JWT) | FR-044 |
+| ⏳ | v1 | `POST` | `/api/v1/auth/refresh` | Renovar token de acceso | FR-044 |
+| ⏳ | v1 | `GET`  | `/api/v1/credits` | Saldo y movimientos de créditos | FR-046 |
+| ⏳ | v1 | `GET`  | `/api/v1/adaptations` | Historial de adaptaciones | FR-045 |
+| ⏳ | v1 | `GET`  | `/api/v1/adaptations/{id}` | Detalle de una adaptación guardada | FR-045 |
+| ⏳ | v1 | `POST` | `/api/v1/payments/wompi/checkout` | Iniciar compra de créditos (firma server-side) | FR-047, FR-049 |
+| ⏳ | v1 | `POST` | `/api/v1/webhooks/wompi` | Confirmación de pago firmada e idempotente | FR-048 |
+| ⏳ | v1 | `POST` | `/api/v1/consent` · `POST /api/v1/consent/revoke` | Consentimiento de datos y revocación | FR-051, FR-052 |
+| ⏳ | v1 | `GET`  | `/api/v1/me/data` · `DELETE /api/v1/me` | Derechos ARCO (acceso / supresión) | FR-052 |
+| ⏳ | v1 | `POST` | `/api/v1/cv/parse` | Subir y extraer CV (PDF/DOCX) | FR-054, FR-055 |
 
 ---
 
@@ -54,9 +62,9 @@
 
 ### 1.4 Sellado de versión (reproducibilidad — FR-006, FR-013, FR-031)
 Toda respuesta de análisis incluye:
-- `engineVersion` (semver del `ScoringEngine`, p. ej. `"1.0.0"`),
-- `lexiconVersion` (versión del Diccionario de Habilidades, p. ej. `"2026.06.0"`),
-- `contextId` (identificador de la Sesión de Análisis efímera; **no** es PII, es un GUID en memoria).
+- `engineVersion` (semver del `ScoringEngine`, p. ej. `"1.0.0"` — ver `ScoringEngine.Version`),
+- `lexiconVersion` (versión del Diccionario de Habilidades; hoy `"skills.gazetteer.v1"` — sella `SkillGazetteer`),
+- `contextId` (SHA-256 hex de `(cvText + jobText)`, derivado determinista del input; **no** es PII, es un hash reproducible).
 
 El mismo `contextId` se reenvía al recalcular el puntaje del CV adaptado para que la comparación sea válida (FR-031). En v0 el `contextId` vive solo durante la interacción (Sesión de Análisis no persistida, FR-040); el backend lo trata como token opaco y reproducible a partir de `(cvText, jobText, engineVersion)`.
 
@@ -117,11 +125,11 @@ Todas las respuestas de error usan `application/problem+json`. Estructura base:
 
 Particionado **por IP** (con `ForwardedHeadersOptions` para IP real tras proxy). Políticas diferenciadas por costo:
 
-| Política | Endpoints | Límite v0 | Ventana |
-|---|---|---|---|
-| `score` (barata, 0 tokens) | `/score`, `/export/pdf` | 20 solicitudes | 1 min |
-| `adapt` (cara, consume IA) | `/adapt/stream` | 5 solicitudes | 1 hora |
-| Global de concurrencia | todos | 50 concurrentes (sin cola) | — |
+| Política | Endpoints | Límite v0 | Ventana | Estado |
+|---|---|---|---|---|
+| `score` (barata, 0 tokens) | `/api/v1/score` | 20 solicitudes | 1 min | ✅ implementado (`src/BuildCv.Api/Security/RateLimiting.cs:8`) |
+| `ai` (cara, consume IA) | `/api/v1/adapt/stream` | 5 solicitudes | 1 hora | ⏳ planeado M1-IA |
+| Global de concurrencia | todos | 50 concurrentes (sin cola) | — | ⏳ planeado |
 
 **Headers en toda respuesta sujeta a límite** (informa el uso restante — FR-038):
 
@@ -203,7 +211,7 @@ Respuesta `429` (cuerpo ProblemDetails):
   "band": "Coincidencia media",
   "honestyNotice": "Este puntaje mide coincidencia con esta vacante y legibilidad para sistemas automáticos. No es un \"puntaje ATS oficial\" ni garantiza empleo.",
   "engineVersion": "1.0.0",
-  "lexiconVersion": "2026.06.0",
+  "lexiconVersion": "skills.gazetteer.v1",
   "contextId": "9b2c1f44-0e3a-4d8b-9b6e-2a7c0d1e5f10",
   "components": [
     {
@@ -262,7 +270,7 @@ Respuesta `429` (cuerpo ProblemDetails):
         "matchLevel": "exact",
         "location": "prominent",
         "creditAwarded": 1.0,
-        "evidence": "Construí APIs REST con ASP.NET Core"
+        "note": "Encontrado en sección de habilidades"
       },
       {
         "canonicalTerm": "PostgreSQL",
@@ -272,7 +280,7 @@ Respuesta `429` (cuerpo ProblemDetails):
         "matchLevel": "alias",
         "location": "buried",
         "creditAwarded": 0.6,
-        "evidence": "EF Core sobre PostgreSQL (mencionado en un solo proyecto)"
+        "note": "Mencionado en un solo proyecto"
       }
     ],
     "missing": [
@@ -284,7 +292,7 @@ Respuesta `429` (cuerpo ProblemDetails):
         "matchLevel": "none",
         "location": "absent",
         "creditAwarded": 0.0,
-        "reason": "Aparece en la sección de requisitos obligatorios."
+        "note": "Aparece en la sección de requisitos obligatorios"
       },
       {
         "canonicalTerm": "Kubernetes",
@@ -294,7 +302,7 @@ Respuesta `429` (cuerpo ProblemDetails):
         "matchLevel": "none",
         "location": "absent",
         "creditAwarded": 0.0,
-        "reason": "Deseable; menor peso."
+        "note": "Deseable; menor peso"
       }
     ],
     "partial": [
@@ -306,13 +314,13 @@ Respuesta `429` (cuerpo ProblemDetails):
         "matchLevel": "related",
         "location": "buried",
         "creditAwarded": 0.3,
-        "evidence": "Mencionas \"nube\" sin especificar Azure; crédito parcial por relación."
+        "note": "Mencionas 'nube' sin especificar Azure; crédito parcial por relación"
       }
     ]
   },
   "recommendations": [
     {
-      "action": "Sube \"PostgreSQL\" a tu sección de Habilidades; hoy está enterrada en un proyecto.",
+      "action": "Sube 'PostgreSQL' a tu sección de Habilidades; hoy está enterrada en un proyecto.",
       "type": "resurface",
       "targetComponent": "match",
       "estimatedImpact": 6,
@@ -320,7 +328,7 @@ Respuesta `429` (cuerpo ProblemDetails):
       "honestyNote": "Solo reubica algo que ya está en tu CV."
     },
     {
-      "action": "Añade métricas a tus logros (p. ej. \"reduje latencia 30%\").",
+      "action": "Añade métricas a tus logros (p. ej. 'reduje latencia 30%').",
       "type": "addMetric",
       "targetComponent": "achievements",
       "estimatedImpact": 4,

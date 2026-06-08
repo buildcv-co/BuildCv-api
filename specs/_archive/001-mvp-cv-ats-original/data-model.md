@@ -3,12 +3,15 @@
 > **Artefacto SDD:** `specs/001-mvp-cv-ats/data-model.md` — define las **entidades** del glosario canónico de `spec.md` con sus **tipos**, **claves**, **relaciones**, **índices**, **restricciones/validaciones** y **notas de EF Core / PostgreSQL**. Es el "CÓMO se estructuran los datos" que respalda `contracts/api-contract.md` y `tasks.md`, derivado de `spec.md` (QUÉ) y `research.md` (decisiones técnicas).
 >
 > **Idioma:** español (documentación) · identificadores de código en inglés.
-> **Fecha base:** 2026-06-06 · **Stack persistencia (v1):** EF Core 9 + Npgsql + PostgreSQL.
+> **Fecha base:** 2026-06-06 · **Stack persistencia (v1 planeado):** EF Core 9+ + Npgsql + PostgreSQL.
 > **Fuentes canónicas:** entidades, IDs FR/US y atributos provienen **sin cambios** de `spec.md` §4 y del INSUMO del motor de puntaje (DTOs en `BuildCv.Domain.Scoring`).
 >
-> **Regla rectora de este documento:**
-> - **v0 (P0): NINGUNA entidad se persiste.** Todo el modelo de v0 vive **en memoria** como *records inmutables* del dominio; no hay `DbContext`, ni base de datos, ni migraciones (materializa FR-040, FR-041, NFR-001).
-> - **v1 (P1):** se introduce persistencia (EF Core + PostgreSQL) para `Usuario`, `CV`, `Vacante`, `Resultado de Análisis`, `Adaptación`, `Movimiento de Crédito`, `Transacción de Pago` y `Consentimiento de Datos`, bajo consentimiento informado (FR-045, FR-046, FR-051, NFR-004, NFR-023).
+> **Estado del modelo (2026-06-07):**
+> - **Parte A (v0–M1) ✅ implementada en código** (`src/BuildCv.Domain/*.cs` y `src/BuildCv.Api/Contracts/ScoreResponse.cs`). Esta sección refleja los tipos C# exactos que están en disco, verificados leyendo los archivos `.cs` el 2026-06-07.
+> - **Parte B (v1) ⏳ planeada.** Las entidades marcadas con `[planeado v1]` (Usuario, CV persistido, Vacante persistida, Pagos, Créditos, Consentimiento) **aún no existen en código**. EF Core, Npgsql, PostgreSQL, migraciones e índices llegan con M3 (cuentas) y M4 (pagos).
+> - **En v0 NO se persiste nada** (Art. III Constitución, FR-040, NFR-001): el motor procesa en memoria y descarta al responder.
+>
+> **Stack real (jun-2026):** .NET 10 LTS, solución `BuildCv.slnx`, layout `src/` + `tests/`. Frontend en directorio hermano `../BuildCv-web/`.
 
 ---
 
@@ -18,36 +21,36 @@
 2. **Determinismo y reproducibilidad (FR-006, FR-013, FR-031):** cada `Resultado de Análisis` y cada `Adaptación` graban `EngineVersion`, `GazetteerVersion` y `ContextHash`. La comparación "62 → 89" solo es válida entre resultados con el **mismo `ContextHash`**.
 3. **Separación dato/instrucción (FR-026):** los campos `RawText` de CV y Vacante son **datos opacos**; el modelo no les asigna semántica ejecutable.
 4. **Privacidad por diseño (FR-040, NFR-001):** la persistencia es exclusiva de v1 y opt-in por consentimiento. Las columnas de contenido (`RawText`, `AdaptedText`) se marcan como **dato personal** (potencialmente sensible) para políticas de retención/supresión.
-5. **Convención PostgreSQL:** `snake_case` para tablas y columnas (vía `EFCore.NamingConventions` → `UseSnakeCaseNamingConvention()`); claves primarias `uuid` generadas con **UUIDv7** (`Guid.CreateVersion7()`, .NET 9) para localidad de índice y orden temporal; marcas de tiempo en `timestamptz` (UTC).
+5. **Convención PostgreSQL:** `snake_case` para tablas y columnas (vía `EFCore.NamingConventions` → `UseSnakeCaseNamingConvention()`); claves primarias `uuid` generadas con **UUIDv7** (`Guid.CreateVersion7()`, .NET 10) para localidad de índice y orden temporal; marcas de tiempo en `timestamptz` (UTC).
 6. **Auditoría inmutable:** `Movimiento de Crédito` es **append-only**; nunca se actualiza ni borra una fila de saldo, se agregan filas compensatorias.
 
 ---
 
 ## 2. Mapa de persistencia por hito (todas las entidades del glosario)
 
-> Clasificación de **cada** entidad de `spec.md` §4: dónde vive y cómo se representa.
+> Clasificación de **cada** entidad de `spec.md` §4: dónde vive y cómo se representa **hoy (jun-2026)** vs lo planeado para v1. Marcadas con `[planeado v1]` las entidades que aún no existen en código.
 
-| # | Entidad (glosario canónico) | v0 | v1 | Representación |
+| # | Entidad (glosario canónico) | M0–M1 (jun-2026) | v1 planeado | Representación |
 |---|---|---|---|---|
-| 1 | **CV (Hoja de Vida)** | En memoria (`CvDocument`) | **Tabla `cv_documents`** | Entidad persistida (v1) |
-| 2 | **Vacante** | En memoria (`JobPosting`) | **Tabla `job_postings`** | Entidad persistida (v1) |
-| 3 | **Requisito de Vacante** | En memoria (`Requirement` ⊂ `JobRequirementSet`) | `jsonb` dentro de `analysis_results` | Value object |
-| 4 | **Coincidencia de Keyword** | En memoria (`MatchResult`) | `jsonb` dentro de `analysis_results` | Value object |
-| 5 | **Componente de Puntaje** | En memoria (`ComponentScore`) | `jsonb` dentro de `analysis_results` | Value object |
-| 6 | **Resultado de Análisis** | En memoria (`ScoreResult`) | **Tabla `analysis_results`** | Entidad persistida (v1), desglose en `jsonb` |
-| 7 | **Recomendación** | En memoria (`Recommendation`) | `jsonb` dentro de `analysis_results` | Value object |
-| 8 | **Adaptación** | En memoria (`Adaptation`) | **Tabla `adaptations`** | Entidad persistida (v1) |
-| 9 | **Verificación de Honestidad** | En memoria (`HonestyVerdict`) | `jsonb` dentro de `adaptations` | Value object |
-| 10 | **Delta de Mejora** | En memoria (`ScoreDelta`) | `jsonb` dentro de `adaptations` | Value object |
-| 11 | **Sesión de Análisis** | En memoria (`AnalysisSession`) | **NUNCA persistida** | Contexto efímero (solo v0) |
-| 12 | **Diccionario de Habilidades** | Recurso embebido (YAML) inmutable | Recurso embebido (YAML) inmutable | **No es tabla**; recurso versionado |
-| 13 | **Usuario** | — (sin cuentas en v0) | **Tabla `users`** (ASP.NET Core Identity) | Entidad persistida (v1) |
-| 14 | **Crédito** | — | Saldo en `users.credit_balance` + ledger | Value object derivado del ledger |
-| 15 | **Movimiento de Crédito** | — | **Tabla `credit_ledger_entries`** | Entidad persistida (v1), append-only |
-| 16 | **Transacción de Pago** | — | **Tabla `payment_transactions`** | Entidad persistida (v1) |
-| 17 | **Consentimiento de Datos** | — | **Tabla `data_consents`** | Entidad persistida (v1) |
+| 1 | **CV (Hoja de Vida)** | Entrada `string CvText` (en `ScoreCvCommand`) | `[planeado]` Tabla `cv_documents` | Texto pegado validado (200..20.000) |
+| 2 | **Vacante** | Entrada `string JobText` (en `ScoreCvCommand`) | `[planeado]` Tabla `job_postings` | Texto pegado validado (100..20.000) |
+| 3 | **Requisito de Vacante** | `Requirement` ⊂ `JobRequirementSet` (en `Domain/Jobs/`) | `jsonb` dentro de `analysis_results` | Value object ✅ |
+| 4 | **Coincidencia de Keyword** | `MatchResult` (en `Domain/Scoring/`) | `jsonb` dentro de `analysis_results` | Value object ✅ |
+| 5 | **Componente de Puntaje** | `ComponentScore` (en `Domain/Scoring/`) | `jsonb` dentro de `analysis_results` | Value object ✅ |
+| 6 | **Resultado de Análisis** | `ScoreResult` (en `Domain/Scoring/`) | `[planeado]` Tabla `analysis_results` | Entidad persistida (v1) con desglose `jsonb` |
+| 7 | **Recomendación** | `Recommendation` (en `Domain/Scoring/`) | `jsonb` dentro de `analysis_results` | Value object ✅ |
+| 8 | **Adaptación** | `[planeado]` M1-IA | `[planeado]` Tabla `adaptations` | Entidad persistida (v1) |
+| 9 | **Verificación de Honestidad** | `[planeado]` M1-IA (`HonestyVerdict`) | `jsonb` dentro de `adaptations` | Value object |
+| 10 | **Delta de Mejora** | `[planeado]` M1-IA (`ScoreDelta`) | `jsonb` dentro de `adaptations` | Value object |
+| 11 | **Sesión de Análisis** | `ScoreCvCommand` + `ScoreResult` (ciclo de 1 request) | **NUNCA persistida** | Contexto efímero (solo M0–M1) |
+| 12 | **Diccionario de Habilidades** | Recurso embebido YAML inmutable (v1) | Recurso embebido (YAML) inmutable | **No es tabla**; recurso versionado ✅ |
+| 13 | **Usuario** | — (sin cuentas) | `[planeado]` Tabla `users` (ASP.NET Core Identity) | Entidad persistida (v1) |
+| 14 | **Crédito** | — | `[planeado]` Saldo en `users.credit_balance` + ledger | Value object derivado del ledger |
+| 15 | **Movimiento de Crédito** | — | `[planeado]` Tabla `credit_ledger_entries` | Entidad persistida (v1), append-only |
+| 16 | **Transacción de Pago** | — | `[planeado]` Tabla `payment_transactions` | Entidad persistida (v1) |
+| 17 | **Consentimiento de Datos** | — | `[planeado]` Tabla `data_consents` | Entidad persistida (v1) |
 
-**Resumen:** v0 → **0 tablas**. v1 → **7 tablas de dominio** (`cv_documents`, `job_postings`, `analysis_results`, `adaptations`, `credit_ledger_entries`, `payment_transactions`, `data_consents`) + tablas de **ASP.NET Core Identity** (`users` = `AspNetUsers` extendida, roles, etc.). El **Diccionario de Habilidades** y los léxicos del motor son **recursos del repositorio**, no datos de BD en el MVP.
+**Resumen:** M0–M1 (jun-2026) → **0 tablas**, todo en memoria, sin persistencia. M1-IA → suma `Adaptation`/`HonestyVerdict`/`ScoreDelta` (en memoria). v1 (M3) → **7 tablas de dominio** (`cv_documents`, `job_postings`, `analysis_results`, `adaptations`, `credit_ledger_entries`, `payment_transactions`, `data_consents`) + tablas de **ASP.NET Core Identity** (`users` = `AspNetUsers` extendida, roles, etc.). El **Diccionario de Habilidades** y los léxicos del motor son **recursos del repositorio**, no datos de BD en el MVP.
 
 ---
 
@@ -55,69 +58,87 @@
 
 > v0 procesa todo en memoria y lo descarta al responder (FR-040, NFR-001). No hay `DbContext`. Las estructuras siguientes son **`record` inmutables** del dominio (`BuildCv.Domain.Scoring`), 100% testeables sin infraestructura. Los tipos coinciden con los DTOs del INSUMO del motor de puntaje.
 
-## A.0 Sesión de Análisis (raíz efímera — solo v0)
+## A.0 Input del caso de uso (raíz efímera — solo v0)
 
-`AnalysisSession` agrupa, **solo en memoria**, las referencias de una interacción: CV, Vacante, Resultado, Adaptación y Delta. **Jamás se serializa a disco ni a BD.** Vive durante el ciclo de una petición HTTP (o de la pestaña del navegador para el borrador local de FR-004); su `CancellationToken` corta el streaming y el gasto de IA (FR-028).
+> **No existe** un `record AnalysisSession` en el código actual. Lo que existe es el **input del comando** del caso de uso, que viaja como parte del `ScoreCvCommand` y se descarta tras responder.
 
-| Campo | Tipo C# | Notas |
+```csharp
+public sealed record ScoreCvCommand(string CvText, string JobText);
+```
+
+**Validación (FluentValidation, `ScoreCvValidator`):**
+- `CvText`: no vacío, 200..20.000 caracteres (FR-002, FR-037).
+- `JobText`: no vacío, 100..20.000 caracteres (FR-002, FR-037).
+- `CvText` y `JobText` no pueden ser idénticos (`Must(NotBeIdentical)`).
+
+**Privacidad (Art. III, FR-040, NFR-001):** el contenido del CV y de la vacante se procesa **en memoria** durante una sola petición HTTP y se descarta al responder. **No** se persiste, **no** se loguea, **no** se envía a caché compartida. El `traceId`/`Activity.Id` se usa en logs como único correlador (NFR-002).
+
+## A.1 CV (Hoja de Vida) — `CvAnalysis` (análisis) + `CvProfile` (vista del matcher)
+
+> En el código actual **no existe** `CvDocument`/`InputMode`/`DetectedSection`/`DetectedSkill`/`ExperienceItem`/`ContactInfo`. Lo que existe es el **input** (`ScoreCvCommand.CvText`, ya descrito en §A.0) y el **resultado del análisis** que produce `CvAnalyzer` (`CvAnalysis`), que es lo que consume el motor de puntaje.
+
+```csharp
+public sealed record CvAnalysis(
+    CvProfile Profile,                       // vista que consume el matcher
+    IReadOnlySet<string> SectionsPresent,     // secciones detectadas (insumo C2)
+    bool HasContact,                         // compuerta C2 (FR-012): sin contacto ⇒ cap
+    bool HasExperience,                      // compuerta C2 (FR-012): sin experiencia ⇒ cap
+    int ActionVerbCount,                     // insumo C3 (verbos de acción)
+    int QuantifiedAchievementCount,          // insumo C3 (logros con métrica)
+    int WordCount,                           // insumo C5 (longitud/densidad)
+    int MaxSkillRepetition);                 // anti keyword-stuffing (C5, compuerta)
+
+public sealed record CvProfile(
+    IReadOnlyDictionary<string, Placement> SkillPlacements,   // skill canónico → Placement
+    IReadOnlySet<string> Tokens,                              // tokens normalizados
+    IReadOnlySet<string> Stems);                              // stems (D02)
+```
+
+| Atributo (glosario `spec.md` §4) | Campo C# real | Notas |
 |---|---|---|
-| `SessionId` | `Guid` (UUIDv7) | Solo correlación de logs (metadato no sensible, NFR-002); no se persiste |
-| `Cv` | `CvDocument` | Entrada en memoria |
-| `Job` | `JobPosting` | Entrada en memoria |
-| `Result` | `ScoreResult?` | Resultado del análisis determinista |
-| `Adaptation` | `Adaptation?` | Adaptación generada por IA (si se solicitó) |
-| `Delta` | `ScoreDelta?` | Comparación antes/después |
+| texto/contenido | `ScoreCvCommand.CvText` | Entrada cruda, validada 200..20.000 |
+| secciones detectadas | `CvAnalysis.SectionsPresent` | Derivadas por `SectionSplitter` |
+| habilidades detectadas | `CvProfile.SkillPlacements` (keys) | Canónico + `Placement` (Prominent/Buried/NotFound) |
+| experiencias | (derivado de verbos/métricas) | `ActionVerbCount`, `QuantifiedAchievementCount` |
+| datos de contacto | `CvAnalysis.HasContact` (bool) | Insumo de compuerta C2 |
 
-> **Honestidad de privacidad:** `SessionId` es el "identificador de contexto/traza" mencionado en NFR-002. Nunca acompaña al contenido del CV en logs.
+**Modo de entrada:** en M0–M1 solo se acepta `CvText` pegado. La distinción `PastedText`/`UploadedFile` del spec no se modela en código porque la subida de archivos llega en M2 vía el puerto `ICvParser` ⏳. En v0, con texto pegado, `m_{C4} = 0.5` (formato parcialmente medible, FR-011); con archivo (v1) ⇒ `m_{C4} = 1.0`.
 
-## A.1 CV (Hoja de Vida) — `CvDocument`
+## A.2 Vacante — `JobRequirementSet` (requisitos extraídos)
 
-| Atributo (glosario) | Campo C# | Tipo | Notas |
-|---|---|---|---|
-| texto/contenido | `RawText` | `string` | Validado: no vacío, longitud mín/máx (FR-002, FR-037) |
-| modo de entrada | `Mode` | `InputMode` (`PastedText` \| `UploadedFile`) | Controla la medibilidad `m_c` del formato (FR-011) |
-| secciones detectadas | `Sections` | `IReadOnlyList<DetectedSection>` | Derivadas por el motor (no entrada del usuario) |
-| habilidades detectadas | `Skills` | `IReadOnlyList<DetectedSkill>` | Canónico + ubicación (`Placement`) |
-| experiencias | `Experiences` | `IReadOnlyList<ExperienceItem>` | Viñetas, verbos, métricas (insumo de C3) |
-| datos de contacto | `Contact` | `ContactInfo` (`Email?`, `Phone?`) | Insumo de compuerta C2 (FR-012) |
+> En el código actual **no existe** `JobPosting`/`JobSection`. Lo que existe es el **input** (`ScoreCvCommand.JobText`) y el **set de requisitos extraídos** que produce `JobAnalyzer` (`JobRequirementSet`).
 
 ```csharp
-public sealed record CvDocument(string RawText, InputMode Mode);   // entrada cruda
-public enum InputMode { PastedText, UploadedFile }                  // v0: siempre PastedText
-// El "CvAnalysis" derivado (secciones/skills/experiencias/contacto) lo produce el motor.
+public sealed record JobRequirementSet(
+    IReadOnlyList<Requirement> Requirements,
+    string ContextHash);                                  // sella la extracción (FR-031)
 ```
 
-> En **v0** solo existe `Mode = PastedText` ⇒ `m_{C4} = 0.5` (formato parcialmente medible, FR-011). `UploadedFile` se habilita en v1 con `ICvParser` (FR-054, FR-055) ⇒ `m_{C4} = 1.0`.
+| Atributo (glosario `spec.md` §4) | Campo C# real | Notas |
+|---|---|---|
+| texto/contenido | `ScoreCvCommand.JobText` | Entrada cruda, validada 100..20.000 |
+| secciones detectadas | (derivadas) → `Requirement.Section` | requisitos / responsabilidades / deseables / título |
+| título/cargo | (derivado) | `Requirement.Section == Title` indica el nombre del cargo |
 
-## A.2 Vacante — `JobPosting`
-
-| Atributo | Campo C# | Tipo | Notas |
-|---|---|---|---|
-| texto/contenido | `RawText` | `string` | Validado igual que el CV (FR-002) |
-| secciones detectadas | (derivadas) | `IReadOnlyList<JobSection>` | requisitos / responsabilidades / deseables / título → `RequirementSection` |
-
-```csharp
-public sealed record JobPosting(string RawText);
-public enum RequirementSection { MustHave, Responsibility, NiceToHave, Title }
-```
+> El `ContextHash` de `JobRequirementSet` es la **clave de reproducibilidad** del recálculo (FR-031): el CV adaptado se re-puntúa con el mismo set de requisitos. El motor (`ScoringEngine`) sella el `ContextHash` en cada `ScoreResult` (FR-006, FR-013).
 
 ## A.3 Requisito de Vacante — `Requirement` (⊂ `JobRequirementSet`)
 
 | Atributo | Campo C# | Tipo | Notas |
 |---|---|---|---|
-| término canónico | `CanonicalId`, `Display` | `string` | Resuelto contra el Diccionario de Habilidades |
+| id canónico | `CanonicalId` | `string` | `Id` del `SkillEntry` del gazetteer, o el término normalizado si no se resolvió |
+| término para mostrar | `Display` | `string` | Tal como aparece en la vacante |
 | categoría | `Category` | `SkillCategory` (`HardSkill` \| `Tool` \| `SoftSkill` \| `GenericKeyword`) | `base_category` del peso (FR-014) |
-| sección de origen | `Section` | `RequirementSection` | `section_multiplier` del peso |
+| sección de origen | `Section` | `RequirementSection` (`MustHave` \| `Responsibility` \| `NiceToHave` \| `Title`) | `section_multiplier` del peso |
 | importancia/peso | `Weight` | `double` | `w_i` clamped a `[0.2, 2.0]` (FR-014) |
 
 ```csharp
+public enum RequirementSection { MustHave, Responsibility, NiceToHave, Title }
 public sealed record Requirement(string CanonicalId, string Display,
     SkillCategory Category, RequirementSection Section, double Weight);
-public sealed record JobRequirementSet(
-    IReadOnlyList<Requirement> Requirements, string ContextHash);   // ContextHash sella la extracción
 ```
 
-> El `ContextHash` de `JobRequirementSet` es la **clave de reproducibilidad** del recálculo (FR-031): el CV adaptado se re-puntúa con el mismo set de requisitos.
+> Verificado contra `src/BuildCv.Domain/Jobs/Requirement.cs`. El `ContextHash` de `JobRequirementSet` (A.2) es la **clave de reproducibilidad** del recálculo (FR-031): el CV adaptado se re-puntúa con el mismo set de requisitos.
 
 ## A.4 Coincidencia de Keyword — `MatchResult`
 
@@ -142,52 +163,74 @@ public enum Placement { Prominent, Buried, NotFound }
 |---|---|---|---|
 | identificador del componente | `Id` | `ComponentId` (`Match`\|`Structure`\|`Achievements`\|`Format`\|`Length`) | C1–C5 (FR-007) |
 | subpuntaje | `SubScore` | `double` ∈ `[0,1]` | — |
-| peso | `Weight` | `double` | C1:0.45·C2:0.20·C3:0.20·C4:0.10·C5:0.05 |
+| peso | `Weight` | `double` | C1:0.45 · C2:0.20 · C3:0.20 · C4:0.10 · C5:0.05 (verificado en `ScoringEngine.cs`) |
 | cobertura de medición | `Measurability` | `double` ∈ `[0,1]` | `m_c`; v0 `m_{C4}=0.5` (FR-011) |
-| nivel de confianza | `Confidence` | `double` ∈ `[0,1]` | — |
+| nivel de confianza | `Confidence` | `double` ∈ `[0,1]` | Mapeado a `low`/`medium`/`high` en el contrato HTTP |
 | resumen explicativo | `Summary` | `string` | Atribución a regla concreta (FR-008) |
-| (anexo) | `Recommendations` | `IReadOnlyList<Recommendation>` | Recomendaciones que mejoran este componente |
 
 ```csharp
 public enum ComponentId { Match, Structure, Achievements, Format, Length }
-public sealed record ComponentScore(ComponentId Id, double SubScore, double Weight,
-    double Measurability, double Confidence, string Summary,
-    IReadOnlyList<Recommendation> Recommendations);
+public sealed record ComponentScore(
+    ComponentId Id, double SubScore, double Weight,
+    double Measurability, double Confidence, string Summary);
 ```
+
+> **Nota:** el campo `Recommendations` que mencionaba una versión preliminar **no existe** en el `ComponentScore` real; las recomendaciones viven en una lista aparte a nivel de `ScoreResult` (A.6) y referencian el `ComponentId` que mejoran.
 
 ## A.6 Resultado de Análisis — `ScoreResult` (raíz del desglose)
 
-| Atributo | Campo C# | Tipo | Notas |
-|---|---|---|---|
-| puntaje global | `Overall` | `int` ∈ `[0,100]` | Entero, redondeo half-up (FR-005) |
-| banda | `Band` | `ScoreBand` (`Bajo`\|`Medio`\|`Bueno`\|`Fuerte`) | UI; el número manda (FR-010) |
-| aviso de encuadre honesto | `Disclaimer` | `string` | "Coincidencia + legibilidad, no ATS oficial" (FR-009) |
-| componentes de puntaje | `Components` | `IReadOnlyList<ComponentScore>` | C1–C5 (FR-007) |
-| análisis de keywords | `Keywords` | `KeywordAnalysis` | presentes/faltantes/parciales (FR-019) |
-| recomendaciones | `Recommendations` | `IReadOnlyList<Recommendation>` | Ordenadas por impacto (FR-021) |
-| problemas de formato | `FormatIssues` | `IReadOnlyList<FormatIssue>` | severidad + descripción |
-| versión del motor | `EngineVersion` | `string` | p. ej. `scoring-1.3.0+gz-2.1` (FR-013) |
-| identificador de contexto | `ContextHash` | `string` | Sella la comparación (FR-031) |
-
 ```csharp
 public sealed record ScoreResult(
-    int Overall, ScoreBand Band, string Disclaimer,
-    IReadOnlyList<ComponentScore> Components,
-    KeywordAnalysis Keywords,
-    IReadOnlyList<Recommendation> Recommendations,
-    IReadOnlyList<FormatIssue> FormatIssues,
-    string EngineVersion, string ContextHash);
+    int Overall,                                      // ∈ [0,100]
+    ScoreBand Band,                                   // Bajo|Medio|Bueno|Fuerte
+    string Disclaimer,                                // encuadre honesto (FR-009)
+    IReadOnlyList<ComponentScore> Components,         // C1..C5
+    KeywordAnalysis Keywords,                         // present/missing/partial
+    IReadOnlyList<Recommendation> Recommendations,     // priorizadas por impacto (FR-021)
+    IReadOnlyList<FormatIssue> FormatIssues,          // code/severity/message
+    IReadOnlyList<GateApplied> GatesApplied,          // caps aplicados (FR-012)
+    string EngineVersion,                             // "1.0.0" (ScoringEngine.Version)
+    string LexiconVersion,                            // "skills.gazetteer.v1"
+    string ContextHash);                              // SHA-256 de CvText+JobText (FR-031)
+
 public enum ScoreBand { Bajo, Medio, Bueno, Fuerte }
 
 public sealed record KeywordAnalysis(
-    IReadOnlyList<MatchedKeyword> Matched,
-    IReadOnlyList<MissingKeyword> Missing,
-    IReadOnlyList<PartialKeyword> RelatedPartial);
-public sealed record MatchedKeyword(string Canonical, MatchTier Tier, string WhereFound);
-public sealed record MissingKeyword(string Canonical, double Importance, string Advice, string Reason);
-public sealed record PartialKeyword(string Req, string YouHave, double Credit);
-public sealed record FormatIssue(string Severity, string Issue);  // "warn" | "info"
+    IReadOnlyList<KeywordView> Present,
+    IReadOnlyList<KeywordView> Missing,
+    IReadOnlyList<KeywordView> Partial);
+
+public sealed record KeywordView(
+    string CanonicalTerm,                             // p. ej. "PostgreSQL"
+    SkillCategory Category,                           // HardSkill|Tool|SoftSkill|GenericKeyword
+    RequirementSection Section,                       // MustHave|Responsibility|NiceToHave|Title
+    double Weight,                                    // peso heredado del Requirement
+    MatchTier MatchLevel,                             // None|Exact|Alias|Lemma|Related|Fuzzy
+    Placement Location,                               // Prominent|Buried|NotFound
+    double Credit,                                    // ∈ [0,1]
+    string Note);                                     // texto explicativo
+
+public sealed record FormatIssue(string Code, string Severity, string Message);
+// Severity: "warn" | "info"
+
+public sealed record GateApplied(ComponentId Component, double Cap, string Reason, string Message);
 ```
+
+| Atributo (glosario `spec.md` §4) | Campo C# real | Notas |
+|---|---|---|
+| puntaje global | `Overall` | Entero, redondeo half-up (FR-005) |
+| banda | `Band` | UI; el número manda (FR-010) |
+| aviso de encuadre honesto | `Disclaimer` | "Coincidencia + legibilidad, no ATS oficial" (FR-009) |
+| componentes de puntaje | `Components` | C1–C5 (FR-007) |
+| keywords (presentes/faltantes/parciales) | `Keywords.{Present,Missing,Partial}` | FR-019 |
+| recomendaciones | `Recommendations` | Ordenadas por impacto (FR-021) |
+| problemas de formato | `FormatIssues` | `code`/`severity`/`message` |
+| compuertas aplicadas | `GatesApplied` | `component`/`cap`/`reason`/`message` (FR-012) |
+| versión del motor | `EngineVersion` | `"1.0.0"` (FR-013) |
+| versión del léxico | `LexiconVersion` | `"skills.gazetteer.v1"` (FR-013) |
+| identificador de contexto | `ContextHash` | Sella la comparación antes/después (FR-031) |
+
+> **Verificado contra `src/BuildCv.Domain/Scoring/ScoreResult.cs` y `KeywordAnalysis.cs`.** El campo `GatesApplied` y `LexiconVersion` **faltan** en versiones anteriores de este spec. El contrato HTTP (`ScoreResponse` en `BuildCv.Api.Contracts`) los refleja 1:1; ver `contracts/api-contract.md` §5.1.
 
 ## A.7 Recomendación — `Recommendation`
 
@@ -198,95 +241,101 @@ public sealed record FormatIssue(string Severity, string Issue);  // "warn" | "i
 | componente afectado | `Component` | `ComponentId` | C1–C5 |
 | impacto estimado | `EstimatedGain` | `int` | Recálculo marginal del Overall (FR-021) |
 | si implica invención | `Invents` | `bool` | `false` para arreglos ejecutables; `true` solo en "brechas reales" tipo `Learn` (FR-022, FR-024) |
-| nota de honestidad | `HonestyNote` | `string?` | p. ej. "no lo inventes" |
+| nota de honestidad | `HonestyNote` | `string` | p. ej. "no lo inventes" (no-null en el código actual) |
 
 ```csharp
-public sealed record Recommendation(string Action, RecommendationType Type,
-    ComponentId Component, int EstimatedGain, bool Invents, string? HonestyNote);
+public sealed record Recommendation(
+    string Action, RecommendationType Type, ComponentId Component,
+    int EstimatedGain, bool Invents, string HonestyNote);
 public enum RecommendationType { Surface, Rewrite, AddMetric, FixFormat, Learn }
 ```
 
-## A.8 Adaptación — `Adaptation`
+## A.8 Adaptación — `Adaptation` ⏳ planeado M1-IA
 
-| Atributo | Campo C# | Tipo | Notas |
-|---|---|---|---|
-| texto adaptado | `AdaptedText` | `string` | Solo reordena/reescribe/prioriza lo existente (FR-023, FR-024) |
-| CV origen | `SourceCv` | `CvDocument` (ref. en memoria) | — |
-| vacante objetivo | `TargetJob` | `JobPosting` (ref. en memoria) | — |
-| resultado de verificación de honestidad | `Honesty` | `HonestyVerdict` | FR-025, FR-029 |
-| metadatos de generación | `Generation` | `GenerationMetadata` | modelo, versión de prompt (`sha256`), tokens, latencia |
+> **No existe en código.** Llega con M1-IA, tras introducir el puerto `IAiClient` y el servicio `ResumeAdaptationService`. Diseño de referencia:
 
 ```csharp
-public sealed record Adaptation(string AdaptedText, HonestyVerdict Honesty,
-    GenerationMetadata Generation, string EngineVersion, string ContextHash);
-public sealed record GenerationMetadata(string Model, string PromptVersion,
-    string PromptSha256, int InputTokens, int OutputTokens, int LatencyMs);
+public sealed record Adaptation(
+    string AdaptedText,
+    HonestyVerdict Honesty,                  // FR-025, FR-029
+    GenerationMetadata Generation,
+    string EngineVersion,
+    string ContextHash);
+
+public sealed record GenerationMetadata(
+    string Model,                            // p. ej. "claude-sonnet-4-6"
+    string PromptVersion,                    // p. ej. "adapt_cv.system.v1"
+    string PromptSha256,                     // detecta invalidaciones de caché
+    int InputTokens,
+    int OutputTokens,
+    int LatencyMs);
 ```
 
-> **Defensa anti-invención (FR-024, FR-025):** la adaptación no crea entidades nuevas; la verificación posterior compara entidades del CV adaptado contra el original.
+> **Defensa anti-invención (FR-024, FR-025):** la adaptación no crea entidades nuevas; la verificación posterior (`AdaptationGuard`/`InventionValidator`) compara entidades del CV adaptado contra el original. Reglas duras en `research.md` D06.
 
-## A.9 Verificación de Honestidad — `HonestyVerdict`
-
-| Atributo | Campo C# | Tipo | Notas |
-|---|---|---|---|
-| estado | `Status` | `HonestyStatus` (`NoInvention` \| `Warning`) | sin invención / advertencia (FR-029) |
-| términos potencialmente nuevos | `PotentiallyNewTerms` | `IReadOnlyList<string>` | Términos no respaldados por el original (FR-025) |
-| nota explicativa | `Note` | `string` | Mensaje para el usuario |
+## A.9 Verificación de Honestidad — `HonestyVerdict` ⏳ planeado M1-IA
 
 ```csharp
-public sealed record HonestyVerdict(HonestyStatus Status,
-    IReadOnlyList<string> PotentiallyNewTerms, string Note);
+public sealed record HonestyVerdict(
+    HonestyStatus Status,                    // NoInvention | Warning
+    IReadOnlyList<string> PotentiallyNewTerms,   // FR-025
+    string Note);
+
 public enum HonestyStatus { NoInvention, Warning }
 ```
 
-## A.10 Delta de Mejora — `ScoreDelta`
+> Se emite como `event: honesty` en el SSE (D08) y se persiste en `adaptations.honesty` (`jsonb`, v1). En M0–M1 no aplica (no hay adaptación).
 
-| Atributo | Campo C# | Tipo | Notas |
-|---|---|---|---|
-| puntaje origen | `From` | `int` | Antes |
-| puntaje destino | `To` | `int` | Después |
-| diferencia por componente | `ByComponent` | `IReadOnlyList<ComponentDelta>` | `{ Component, Delta }` |
-| requisitos resueltos | `Resolved` | `IReadOnlyList<string>` | FR-032 |
-| requisitos aún faltantes | `StillMissing` | `IReadOnlyList<string>` | FR-032 |
-| (guardarraíl) | `PossibleInventions` | `IReadOnlyList<string>` | Skills nuevas no trazables al original (FR-025) |
+## A.10 Delta de Mejora — `ScoreDelta` ⏳ planeado M1-IA
 
 ```csharp
-public sealed record ScoreDelta(int From, int To,
+public sealed record ScoreDelta(
+    int From, int To,
     IReadOnlyList<ComponentDelta> ByComponent,
-    IReadOnlyList<string> Resolved, IReadOnlyList<string> StillMissing,
-    IReadOnlyList<string> PossibleInventions);
+    IReadOnlyList<string> Resolved,             // FR-032
+    IReadOnlyList<string> StillMissing,         // FR-032
+    IReadOnlyList<string> PossibleInventions);  // FR-025
+
 public sealed record ComponentDelta(ComponentId Component, int Delta);
 ```
 
-> **Validez (FR-031):** `Compare(before, after)` exige `before.ContextHash == after.ContextHash`; de lo contrario el delta se rechaza por incomparable.
+> **Validez (FR-031):** exige `before.ContextHash == after.ContextHash`; de lo contrario el delta se rechaza por incomparable.
 
 ## A.11 Diccionario de Habilidades — recurso, NO tabla
 
-El **Diccionario de Habilidades** (gazetteer + léxicos) **no es una entidad de base de datos** en el MVP: es un **recurso embebido versionado** (`gazetteer.vMAJOR.MINOR`, YAML) cargado por un adaptador en `Infrastructure` **fuera del dominio** e inyectado como datos inmutables (`ISkillGazetteer`). Razones: debe ser determinista, versionable en Git, revisable por humanos y sellado en cada `ScoreResult` (FR-013).
-
-| Atributo (glosario) | Forma en el recurso | Notas |
-|---|---|---|
-| versión | `gazetteerVersion` | Grabada en `EngineVersion` del resultado |
-| entradas (término canónico, categoría, alias) | `SkillEntry { Id, Canonical, Category, Aliases }` | YAML |
-| relaciones (implica, relacionada, ascendente) | `Implies`, `Related`, `Broader` | Crédito por nivel (FR-018) |
-| exclusiones de confundibles | `ConfusableWith` (simétrico) | Anti falso positivo `java ⇎ javascript` (FR-017) |
+El **Diccionario de Habilidades** (gazetteer + léxicos) **no es una entidad de base de datos** en el MVP: es un **recurso embebido versionado** (`skills.gazetteer.v1.yaml`) cargado por un adaptador en `Infrastructure/Lexicon/` **fuera del dominio** e inyectado como datos inmutables (`ISkillGazetteer`). Razones: debe ser determinista, versionable en Git, revisable por humanos y sellado en cada `ScoreResult` (FR-013).
 
 ```csharp
-public interface ISkillGazetteer {
-    bool TryResolve(string normalizedToken, out SkillEntry entry);
-    IReadOnlyList<string> Related(string canonicalId);
-    bool AreConfusable(string a, string b);
-}
-public sealed record SkillEntry(string Id, string Canonical, SkillCategory Category,
-    IReadOnlyList<string> Implies, IReadOnlyList<string> Broader);
+public interface ISkillGazetteer;                                        // puerto
+public sealed record SkillEntry(
+    string Id,                                                           // p. ej. "js"
+    string Canonical,                                                    // p. ej. "JavaScript"
+    SkillCategory Category,                                              // HardSkill|Tool|SoftSkill|GenericKeyword
+    IReadOnlyList<string> Aliases,                                       // ["JS", "Javascript", "java script"]
+    IReadOnlyList<string> Implies,                                       // ["TypeScript"]
+    IReadOnlyList<string> Related,                                       // ["Node.js", "npm"]
+    IReadOnlyList<string> Broader,                                       // ["Frontend Development"]
+    IReadOnlyList<string> ConfusableWith);                               // ["Java"] — FR-017, anti falso positivo
 ```
 
-> **Futuro (no MVP):** si se requiere curación vía panel admin, el gazetteer podría migrar a tablas (`skill_entries`, `skill_aliases`, `skill_relations`, `skill_confusables`). Hasta entonces permanece como recurso del repo para preservar determinismo y revisión por PR.
+| Atributo (glosario) | Forma en el recurso YAML | Notas |
+|---|---|---|
+| versión | `gazetteerVersion` (`"skills.gazetteer.v1"`) | Sella `ScoreResult.LexiconVersion` (FR-013) |
+| entradas (id, canónico, categoría) | `Id`, `Canonical`, `Category` | — |
+| alias | `Aliases` | `js`, `javascript` → `JavaScript` |
+| relaciones (implica, relacionada, ascendente) | `Implies`, `Related`, `Broader` | Crédito por nivel de la cascada (FR-018) |
+| exclusiones de confundibles | `ConfusableWith` (simétrico) | Anti falso positivo `java ⇎ javascript` (FR-017) |
+
+> **Verificado contra `src/BuildCv.Domain/Lexicon/SkillEntry.cs` y `SkillGazetteer.cs`.** El recurso YAML está en `src/BuildCv.Infrastructure/Lexicon/skills.gazetteer.v1.yaml` como `EmbeddedResource`. **Futuro (no MVP):** si se requiere curación vía panel admin, el gazetteer podría migrar a tablas (`skill_entries`, `skill_aliases`, `skill_relations`, `skill_confusables`). Hasta entonces permanece como recurso del repo para preservar determinismo y revisión por PR.
 
 ---
 
-# PARTE B — Modelo persistido (v1): EF Core + PostgreSQL
+# PARTE B — Modelo persistido (v1): EF Core + PostgreSQL ⏳ planeado
 
+> **Toda esta parte es diseño aspiracional para v1 (M3+).** En M0–M1 no existe `BuildCvDbContext`, no hay EF Core, no hay PostgreSQL, no hay migraciones, no hay tablas. Los archivos `Application/Abstractions/` (puertos `ICvRepository`, `IPaymentProvider`) y `Infrastructure/Persistence/` (DbContext, repositorios, migraciones) **aún no existen en el repo**; llegan con M3.
+>
+> Se conserva este diseño como referencia de implementación cuando el producto exija cuentas, historial, archivos subidos, pagos y Habeas Data (Art. IX). Materializa FR-051, NFR-004, NFR-024.
+>
 > Se introduce `BuildCvDbContext` en `Infrastructure/Persistence`. Toda persistencia de datos personales requiere `Consentimiento de Datos` vigente (FR-051, NFR-004, NFR-024). Las entidades de v0 (CV, Vacante) ahora pueden **guardarse** para el historial (FR-045); los desgloses de puntaje se persisten como `jsonb`.
 
 ## B.0 Convenciones de mapeo de tipos (C# → EF Core → PostgreSQL)
@@ -546,7 +595,9 @@ La tabla `adaptations` (v1) añade a A.8 las columnas: `id` (PK), `user_id` (FK)
 
 ---
 
-## 3. Diagrama Entidad-Relación (v1)
+## 3. Diagrama Entidad-Relación (v1) ⏳ planeado
+
+> **Este ER describe el modelo de v1 (M3+). En M0–M1 no existen tablas.** Se conserva como blueprint para la fase de cuentas e historial.
 
 **Descripción de relaciones (cardinalidades):**
 - `users` **1 — N** `cv_documents`, `job_postings`, `analysis_results`, `adaptations`, `credit_ledger_entries`, `payment_transactions`, `data_consents` (el usuario es la **raíz de agregación**; borrado en cascada del contenido, `RESTRICT` en pagos).
@@ -659,7 +710,7 @@ erDiagram
 
 ---
 
-## 4. Estrategia de migraciones
+## 4. Estrategia de migraciones ⏳ planeado v1
 
 **v0 — sin migraciones.** No existe `DbContext` ni base de datos. El motor es un servicio de dominio puro; nada que migrar (FR-040, NFR-001). El **Diccionario de Habilidades** y los léxicos se versionan como **recursos del repositorio** (no por EF migrations); su versión se sella en cada resultado (FR-013).
 
@@ -677,7 +728,7 @@ erDiagram
 
 ---
 
-## 5. Privacidad, retención y seguridad en el modelo (trazabilidad)
+## 5. Privacidad, retención y seguridad en el modelo (trazabilidad) ⏳ planeado v1
 
 | Aspecto | Implementación en el modelo | FR / NFR |
 |---|---|---|
@@ -695,7 +746,7 @@ erDiagram
 
 ---
 
-## 6. Trazabilidad entidad → requisitos
+## 6. Trazabilidad entidad → requisitos (referencia, vigente)
 
 | Entidad | FR principales |
 |---|---|

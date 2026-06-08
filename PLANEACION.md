@@ -2,6 +2,10 @@
 
 > **Estado:** Planeación revisada · **Fecha:** 2026-06-06
 > **Objetivo primario (no perderlo de vista):** ser un proyecto que (a) te consiga **empleo** pronto y (b) tenga **usuarios reales**. La monetización es secundaria a esos dos.
+>
+> **Layout del proyecto (2026-06-07):** este repo (`BuildCv-api`) contiene **solo el backend .NET**. El frontend Next.js vive en el directorio hermano `../BuildCv-web/` (repositorio independiente). Los artefactos SDD de este repo (`specs/001-mvp-cv-ats/`) reflejan **solo** lo que está en código del backend; el frontend se documenta en su propio repo.
+>
+> **Estado técnico (2026-06-07):** **M0 (Setup) ✅ DONE** — solución .NET 10 con `BuildCv.slnx` (4 src + 3 test), Serilog, ProblemDetails, OpenAPI+Scalar, versionado, health checks, Dockerfile, CI verde, **92/92 tests verdes**, motor `ScoringEngine` v1.0.0 funcional. **M1 (Núcleo v0) ⏳ parcial** — submotor de puntaje completo (1a–1d ✅) con `POST /api/v1/score`; adaptación IA / streaming SSE / export PDF / frontend (1e–1k ⏳). **M2/M3/M4 ⏳ PENDING** (v1). SDK fijado a **.NET 10.0.100** vía `global.json`.
 
 ---
 
@@ -49,7 +53,7 @@ Parseo CV       → PdfPig (PDF) + OpenXML SDK / DocX (DOCX)  ← ecosistema .NE
 Puntaje         → Algoritmo propio determinístico en C#  ← núcleo, sin LLM
 IA              → API de Anthropic/OpenAI directa, u OpenRouter para enrutar + fallback
 Export PDF      → QuestPDF (librería .NET moderna y excelente)
-Frontend/Host   → Next.js + Vercel + shadcn/ui + Tailwind  ← ya lo conoces
+Frontend/Host   → Next.js + Vercel + Tailwind v4 + diseño custom  ← ya lo conoces
 Auth (v1)       → ASP.NET Core Identity + JWT (refuerza .NET) o Clerk si quieres rapidez
 Pagos (v1)      → Wompi (CO) vía su API REST, tras capa de abstracción
 Hosting API     → Azure App Service (alinea con tu cert Microsoft) o Render/Railway (más barato)

@@ -30,7 +30,7 @@
 | 005 | `cv-pdf-docx-import` | v0.5 / M3 | ✅ SHIPPED | `main` | `1.0.0` (parser) |
 | 006 | `cv-editor` (frontend only, ver [006-cv-editor/](./006-cv-editor/)) | v0.5 / M4 | ✅ SHIPPED (`BuildCv-web`) | — | `0.5.0` (editor) |
 | 007 | `constitution-v1.1.0` | governance | ✅ RATIFICADA | `main` | — |
-| 008 | `observability` | v0.5.1 | 📋 PLANEADO (specs listas) | `008-observability` | — |
+| 008 | `observability` | v0.5.1 | ✅ SHIPPED | `main` | — |
 | 009 | `auth` | v1 | 📋 PLANEADO | — | — |
 | 010 | `persistence` | v1 | 📋 PLANEADO | — | — |
 | 011 | `payments` | v1 | 📋 PLANEADO | — | — |
@@ -162,8 +162,11 @@ Este feature NO tiene implementación en el backend. El API no recibe cambios: r
 - **Quickstart:** [specs/008-observability/quickstart.md](./008-observability/quickstart.md)
 - **Tasks:** [specs/008-observability/tasks.md](./008-observability/tasks.md)
 - **Contracts:** [specs/008-observability/contracts/observability-api.md](./008-observability/contracts/observability-api.md)
-- **Bloqueado por:** Ninguno. Specs listas, listo para implementación.
-- **Branch:** `008-observability`
+- **Endpoint:** `GET /metrics` (Prometheus), `GET /health/ready` (detailed JSON)
+- **Status:** Prometheus metrics (prometheus-net), OpenTelemetry tracing (OTLP), 3 component health checks (Parser, AiClient, PdfGenerator). Serilog structured logging already existed.
+- **Tests:** 5 new integration tests (194 total, all passing)
+- **Commit:** `4975966` "feat(008-observability): Prometheus metrics + component health checks + OpenTelemetry tracing"
+- **Constitution compliance:** Art. III ✅ (no PII in logs/metrics/traces), Art. VI ✅ (observability in Infrastructure + Api, not Domain)
 
 ### 009-auth (v1)
 

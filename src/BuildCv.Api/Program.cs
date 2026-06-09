@@ -13,6 +13,11 @@ using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = BuildCv.Api.Endpoints.ImportEndpoints.MaxRequestBodyBytes;
+});
+
 // Logging estructurado (Serilog). Solo metadatos: nunca se registra el contenido
 // del CV ni de la vacante (privacidad por diseño, NFR-002).
 builder.Services.AddSerilog((_, lc) => lc
@@ -84,6 +89,7 @@ app.MapHealthEndpoints();
 app.MapScoringEndpoints();
 app.MapAdaptEndpoints();
 app.MapExportEndpoints();
+app.MapImportEndpoints();
 
 app.Run();
 

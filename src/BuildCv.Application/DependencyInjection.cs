@@ -1,5 +1,6 @@
 using BuildCv.Application.Features.Adapt;
 using BuildCv.Application.Features.Export;
+using BuildCv.Application.Features.Import;
 using BuildCv.Application.Features.Scoring;
 using BuildCv.Domain.Jobs;
 using BuildCv.Domain.Resumes;
@@ -31,6 +32,9 @@ public static class DependencyInjection
         services.AddSingleton<AdaptCvHandler>();
 
         services.AddSingleton<IValidator<ExportPdfCommand>, ExportPdfValidator>();
+
+        services.AddSingleton<IValidator<ImportCvCommand>, ImportCvValidator>();
+        services.AddSingleton<ImportCvHandler>();
 
         return services;
     }

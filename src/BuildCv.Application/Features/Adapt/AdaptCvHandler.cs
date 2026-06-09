@@ -1,5 +1,6 @@
 using BuildCv.Domain.Adapt;
 using BuildCv.Domain.Common;
+using Microsoft.Extensions.Logging;
 
 namespace BuildCv.Application.Features.Adapt;
 
@@ -19,19 +20,22 @@ public sealed class AdaptCvHandler
     private readonly CrossEntityValidator _crossValidator;
     private readonly SeverityPolicy _severityPolicy;
     private readonly PromptBuilder _promptBuilder;
+    private readonly ILogger<AdaptCvHandler> _logger;
 
     public AdaptCvHandler(
         IAiClient aiClient,
         EntityExtractor extractor,
         CrossEntityValidator crossValidator,
         SeverityPolicy severityPolicy,
-        PromptBuilder promptBuilder)
+        PromptBuilder promptBuilder,
+        ILogger<AdaptCvHandler> logger)
     {
         _aiClient = aiClient;
         _extractor = extractor;
         _crossValidator = crossValidator;
         _severityPolicy = severityPolicy;
         _promptBuilder = promptBuilder;
+        _logger = logger;
     }
 
     public async Task<Result<AdaptationResult>> Handle(AdaptCvCommand command, CancellationToken ct)
@@ -48,7 +52,7 @@ public sealed class AdaptCvHandler
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Console.Error.WriteLine($"AdaptCvHandler: AI client failed (cvLength={command.CvText.Length}, jobLength={command.JobText.Length}, error={ex.GetType().Name})");
+            _logger.LogWarning("AI client failed (cvLength={CvLength}, jobLength={JobLength}, error={ErrorType})", command.CvText.Length, command.JobText.Length, ex.GetType().Name);
             return Result.Failure<AdaptationResult>(new Error("AI_UNAVAILABLE", "Servicio de IA no disponible temporalmente."));
         }
 
@@ -72,8 +76,7 @@ public sealed class AdaptCvHandler
             EngineVersion: "1.0.0",
             AiModel: "claude-sonnet-4-20250514");
 
-        System.Console.WriteLine(
-            $"Adapt completed (cvLength={command.CvText.Length}, jobLength={command.JobText.Length}, severity={finalReport.Severity}, inventions={finalReport.Inventions.Count})");
+        _logger.LogInformation("Adapt completed (cvLength={CvLength}, jobLength={JobLength}, severity={Severity}, inventions={InventionCount})", command.CvText.Length, command.JobText.Length, finalReport.Severity, finalReport.Inventions.Count);
 
         return Result.Success(result);
     }

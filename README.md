@@ -10,7 +10,7 @@ Clean Architecture en 4 capas — regla de dependencias `Domain ← Application 
 
 - **BuildCv.Domain** — núcleo **PURO** (sin IO/red/reloj/aleatoriedad): normalización en español, gazetteer de skills, **Jaro-Winkler / Levenshtein / stemmer escritos a mano**, matcher de cascada y el `ScoringEngine` (C1–C5 con fórmula renormalizada y compuertas).
 - **BuildCv.Application** — casos de uso por feature + puertos (IA, parseo, export…).
-- **BuildCv.Infrastructure** — adaptadores; carga del gazetteer (YAML embebido). IA/PDF/persistencia en hitos futuros.
+- **BuildCv.Infrastructure** — adaptadores; StubAiClient (v0), QuestPDF (export), PdfPig/OpenXML (import), carga del gazetteer (YAML embebido).
 - **BuildCv.Api** — Minimal APIs, ProblemDetails (RFC 9457), OpenAPI/Scalar, versionado, rate limiting nativo, health checks.
 
 ## Endpoints
@@ -18,6 +18,9 @@ Clean Architecture en 4 capas — regla de dependencias `Domain ← Application 
 | Método | Ruta | Descripción |
 |---|---|---|
 | `POST` | `/api/v1/score` | Análisis determinista: puntaje + componentes + keywords + recomendaciones |
+| `POST` | `/api/v1/adapt` | Adaptación del CV con IA (stub v0), validación de invenciones |
+| `POST` | `/api/v1/export` | Generación de PDF (QuestPDF) con validación de invenciones duras |
+| `POST` | `/api/v1/import` | Importación de CV en PDF/DOCX (PdfPig, OpenXML) |
 | `GET` | `/health/live` · `/health/ready` | Salud |
 
 ## Desarrollo
@@ -26,7 +29,7 @@ Requisitos: **.NET 10 SDK**.
 
 ```bash
 dotnet build BuildCv.slnx -c Release        # compila con warnings-as-errors (0 warnings)
-dotnet test                                  # 92 tests (xUnit + FluentAssertions)
+dotnet test                                  # 189 tests (xUnit + FluentAssertions)
 dotnet test --filter "FullyQualifiedName~ScoringEngine"   # una sola clase/test
 dotnet format                                # CI verifica con --verify-no-changes
 dotnet run --project src/BuildCv.Api         # http://localhost:5080 · docs en /scalar/v1
@@ -43,7 +46,7 @@ Incluye **`render.yaml`** (blueprint Docker). El contenedor respeta `$PORT` (Ren
 
 ## Planeación (Spec-Driven Development)
 
-`specs/001-mvp-cv-ats/` (spec · plan · research · data-model · contracts · tasks) y `.specify/memory/constitution.md`. Estrategia general en `PLANEACION.md`.
+`specs/000-INDEX.md` (master registry) y `.specify/memory/constitution.md`. Estrategia general en `PLANEACION.md`.
 
 > .NET 10 · EF Core (v1) · xUnit + FluentAssertions (fijado en 7.x por licencia). Privacidad por diseño: no se persiste el CV; los logs nunca incluyen su contenido.
 

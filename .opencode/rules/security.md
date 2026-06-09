@@ -52,8 +52,8 @@ public sealed class ScoreCvValidator : AbstractValidator<ScoreCvCommand>
 {
     public ScoreCvValidator()
     {
-        RuleFor(x => x.CvText).NotEmpty().MaximumLength(50_000);
-        RuleFor(x => x.JobText).NotEmpty().MaximumLength(20_000);
+        RuleFor(x => x.CvText).NotEmpty().MinimumLength(200).MaximumLength(20_000);
+        RuleFor(x => x.JobText).NotEmpty().MinimumLength(100).MaximumLength(20_000);
     }
 }
 ```
@@ -88,7 +88,7 @@ Si un test o un log muestra accidentalmente una clave: trátalo como **incidente
 
 ```csharp
 // Program.cs (ya cableado en AddAppRateLimiting)
-options.AddPolicy("deterministic", ctx => RateLimitPartition.GetFixedWindowLimiter(
+options.AddPolicy("score", ctx => RateLimitPartition.GetFixedWindowLimiter(
     partitionKey: ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
     factory: _ => new FixedWindowRateLimiterOptions { PermitLimit = 60, Window = TimeSpan.FromMinutes(1) }));
 
@@ -97,7 +97,7 @@ options.AddPolicy("ai", ctx => RateLimitPartition.GetFixedWindowLimiter(
     factory: _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromHours(1) }));
 ```
 
-- `deterministic` (scoring) → permisivo (60/min).
+- `score` (scoring determinista) → permisivo (60/min).
 - `ai` (adaptación) → estricto (5/h) — protege presupuesto.
 - 429 → `ProblemDetails` con `Retry-After` y mensaje honesto ("has alcanzado el tope de adaptaciones; el análisis determinista sigue disponible" — Art. VI, NFR-019).
 

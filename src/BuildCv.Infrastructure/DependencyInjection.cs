@@ -11,6 +11,7 @@ using BuildCv.Infrastructure.Pdf;
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace BuildCv.Infrastructure;
 
@@ -37,13 +38,15 @@ public static class DependencyInjection
             sp.GetRequiredService<EntityExtractor>(),
             sp.GetRequiredService<CrossEntityValidator>(),
             sp.GetRequiredService<SeverityPolicy>(),
-            sp.GetRequiredService<PromptBuilder>()));
+            sp.GetRequiredService<PromptBuilder>(),
+            sp.GetRequiredService<ILogger<AdaptCvHandler>>()));
 
         services.AddSingleton<ValidationGate>();
         services.AddSingleton<IPdfGenerator, QuestPdfGenerator>();
         services.AddSingleton<ExportPdfHandler>(sp => new ExportPdfHandler(
             sp.GetRequiredService<IPdfGenerator>(),
-            sp.GetRequiredService<ValidationGate>()));
+            sp.GetRequiredService<ValidationGate>(),
+            sp.GetRequiredService<ILogger<ExportPdfHandler>>()));
 
         services.AddSingleton<PdfPigCvParser>();
         services.AddSingleton<OpenXmlCvParser>();

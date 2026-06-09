@@ -11,7 +11,7 @@ Domain  ←  Application  ←  Infrastructure
 ```
 
 - **Domain**: PURO. Sin `Microsoft.AspNetCore.*`, sin `Microsoft.Extensions.*` (salvo `DependencyInjection.Abstractions` cuando se compongan servicios), sin SDKs externos, sin IO, sin reloj, sin red, sin aleatoriedad (Art. VI).
-- **Application**: casos de uso + puertos de IO (`IAiClient`, `ICvParser`, `IPdfExporter`, `IPaymentProvider`). Compone los servicios de dominio como Singletons inmutables (ver `Application/DependencyInjection.cs`).
+- **Application**: casos de uso + puertos de IO (`IAiClient`, `ICvParser`, `IPdfGenerator`, `IPaymentProvider`). Compone los servicios de dominio como Singletons inmutables (ver `Application/DependencyInjection.cs`).
 - **Infrastructure**: implementaciones de los puertos. Aquí viven los SDKs externos, `HttpClient`, filesystem, YAML embebido, drivers.
 - **Api**: Minimal APIs, versionado `/api/v1`, OpenAPI, ProblemDetails, rate limiting, health checks. Composición final en `Program.cs`.
 
@@ -32,9 +32,9 @@ Si cualquiera de las dos devuelve algo distinto a "solo Microsoft.NETCore.App", 
 | Puerto (interfaz) | Vive en | Implementación en |
 |---|---|---|
 | `ISkillGazetteer` | `Domain/Lexicon/` | `Infrastructure/Lexicon/` (YAML embebido) |
-| `IAiClient` | `Application/` | `Infrastructure/` (Anthropic / OpenRouter) |
-| `ICvParser` | `Application/` | `Infrastructure/` (PdfPig / DocX) |
-| `IPdfExporter` | `Application/` | `Infrastructure/` (QuestPDF) |
+| `IAiClient` | `Application/` | `Infrastructure/` (StubAiClient para v0) |
+| `ICvParser` | `Application/` | `Infrastructure/` (ParserRouter → PdfPig / OpenXML) |
+| `IPdfGenerator` | `Application/` | `Infrastructure/` (QuestPDF) |
 | `IPaymentProvider` | `Application/` | `Infrastructure/` (Wompi, en v1) |
 
 **Regla:** ningún tipo de un SDK externo sale de `Infrastructure`. Si en `Application` necesitas un `HttpClient`, defines un puerto; la implementación inyecta el `HttpClient`.
@@ -83,7 +83,7 @@ public sealed class ScoreCvHandler(IScoringEngine engine, IValidator<ScoreCvComm
 - **Minimal APIs**, no MVC controllers (ver `Api/Endpoints/ScoringEndpoints.cs`).
 - `MapGroup("/api/v{version:apiVersion}")` para agrupación versionada.
 - `WithName("Score")` + `Produces<ScoreResponse>` + `ProducesValidationProblem()` para OpenAPI rico.
-- `RequireRateLimiting("ai")` o `"deterministic"` según costo (Art. VII).
+- `RequireRateLimiting("ai")` o `"score"` según costo (Art. VII).
 - Errores uniformes: `Results.Problem(...)` con `ProblemDetails` (RFC 9457) o el `ValidationFilter` para 400.
 
 ## Tests por capa

@@ -3,6 +3,7 @@ using BuildCv.Domain.Adapt;
 using BuildCv.Domain.Common;
 using BuildCv.Domain.Export;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace BuildCv.Application.Tests.Export;
@@ -15,7 +16,7 @@ public sealed class ExportPdfHandlerTests
 
     public ExportPdfHandlerTests()
     {
-        _handler = new ExportPdfHandler(_generator, _gate);
+        _handler = new ExportPdfHandler(_generator, _gate, NullLogger<ExportPdfHandler>.Instance);
     }
 
     [Fact]

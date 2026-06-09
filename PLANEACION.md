@@ -5,7 +5,7 @@
 >
 > **Layout del proyecto (2026-06-07):** este repo (`BuildCv-api`) contiene **solo el backend .NET**. El frontend Next.js vive en el directorio hermano `../BuildCv-web/` (repositorio independiente). Los artefactos SDD de este repo (`specs/001-mvp-cv-ats/`) reflejan **solo** lo que está en código del backend; el frontend se documenta en su propio repo.
 >
-> **Estado técnico (2026-06-07):** **M0 (Setup) ✅ DONE** — solución .NET 10 con `BuildCv.slnx` (4 src + 3 test), Serilog, ProblemDetails, OpenAPI+Scalar, versionado, health checks, Dockerfile, CI verde, **92/92 tests verdes**, motor `ScoringEngine` v1.0.0 funcional. **M1 (Núcleo v0) ⏳ parcial** — submotor de puntaje completo (1a–1d ✅) con `POST /api/v1/score`; adaptación IA / streaming SSE / export PDF / frontend (1e–1k ⏳). **M2/M3/M4 ⏳ PENDING** (v1). SDK fijado a **.NET 10.0.100** vía `global.json`.
+> **Estado técnico (2026-06-09):** **M0 (Setup) ✅ DONE** — solución .NET 10 con `BuildCv.slnx` (4 src + 4 test), Serilog, ProblemDetails, OpenAPI+Scalar, versionado, health checks, Dockerfile, CI verde, **189/189 tests verdes**, motor `ScoringEngine` v1.0.0 funcional. **M1 (Núcleo v0) ✅ DONE** — scoring (002), adaptación IA con StubAiClient (003), exportación PDF con QuestPDF (004), importación PDF/DOCX (005), constitución v1.1.0 (007). **M2/M3/M4 ⏳ PENDING** (v1). SDK fijado a **.NET 10.0.100** vía `global.json`.
 
 ---
 
@@ -71,7 +71,7 @@ Hosting API     → Azure App Service (alinea con tu cert Microsoft) o Render/Ra
 - [ ] Pantalla principal: pegar CV (texto) + pegar vacante.
 - [ ] **Algoritmo de puntaje determinístico** + explicación + recomendaciones (el núcleo).
 - [ ] Extracción de keywords de la vacante + match con el CV.
-- [ ] Adaptación del CV con IA (**streaming**), sin inventar nada.
+- [ ] Adaptación del CV con IA (sincronía), sin inventar nada.
 - [ ] Recalcular puntaje del CV nuevo → mostrar mejora ("subiste de 62 a 89").
 - [ ] Copiar resultado / export a **PDF** (QuestPDF).
 - [ ] **Sin cuentas, sin guardar CVs** (procesar en memoria → privacidad + velocidad).
@@ -81,7 +81,6 @@ Hosting API     → Azure App Service (alinea con tu cert Microsoft) o Render/Ra
 > **Definición de "listo" para v0:** un desconocido entra, pega su CV y una vacante, ve su puntaje + recomendaciones, adapta el CV, lo descarga, y todo funciona en móvil. Eso ya es demo-able, posteable y usable.
 
 ### 💳 v1 — Comercial (después de validar que la gente lo usa)
-- [ ] Subir **PDF/DOCX** (no solo texto pegado).
 - [ ] Cuentas (Google + email), historial de CVs y adaptaciones.
 - [ ] Sistema de **créditos** + ledger + compra vía **Wompi** (tarjeta/PSE/Nequi).
 - [ ] Política de datos + autorización **Habeas Data** + minimización.

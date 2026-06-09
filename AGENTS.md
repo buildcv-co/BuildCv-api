@@ -27,9 +27,9 @@
 Clean Architecture, 4 capas, dependencias `Domain ← Application ← Infrastructure`; `Api` compone.
 
 ```
-src/BuildCv.Domain/         PURO: Text, Lexicon, Jobs, Resumes, Scoring, Common
-src/BuildCv.Application/    Features/Scoring/ (Command + Handler + Validator) + puertos de IO
-src/BuildCv.Infrastructure/ Adaptadores: YAML embebido (IA/PDF/pagos en hitos futuros)
+src/BuildCv.Domain/         PURO: Text, Lexicon, Jobs, Resumes, Scoring, Adapt, Export, Common
+src/BuildCv.Application/    Features/ (Scoring, Adapt, Export, Import) + puertos de IO
+src/BuildCv.Infrastructure/ Adaptadores: StubAiClient, QuestPdfGenerator, ParserRouter, GazetteerLoader (YAML embebido)
 src/BuildCv.Api/            Endpoints · Contracts · Errors · Filters · Health · Security
 ```
 
@@ -40,7 +40,7 @@ dotnet list src/BuildCv.Domain package references    # debe ser 0 paquetes exter
 dotnet list src/BuildCv.Domain reference            # solo Microsoft.NETCore.App
 ```
 
-`BuildCv.slnx` es el formato XML moderno (no `.sln`). La solución lista 4 proyectos en `src/` + 3 en `tests/`.
+`BuildCv.slnx` es el formato XML moderno (no `.sln`). La solución lista 4 proyectos en `src/` + 4 en `tests/`.
 
 ## Comandos (CI los corre; ejecútalos antes de cerrar tarea)
 
@@ -79,11 +79,7 @@ dotnet list src/BuildCv.Domain package references          # 0 paquetes externos
 | Necesitas… | Ve a |
 |---|---|
 | Reglas duras / por qué | `.specify/memory/constitution.md` |
-| Producto y FR/US/NFR | `specs/001-mvp-cv-ats/spec.md` |
-| Decisiones técnicas | `specs/001-mvp-cv-ats/plan.md` + `research.md` |
-| Tareas y dependencias | `specs/001-mvp-cv-ats/tasks.md` |
-| Modelo de datos | `specs/001-mvp-cv-ats/data-model.md` |
-| Contratos HTTP | `specs/001-mvp-cv-ats/contracts/` |
+| Índice maestro de features | `specs/000-INDEX.md` |
 | Visión y priorización | `PLANEACION.md` |
 | Convenciones operativas | `.opencode/rules/{architecture,security,quality_and_testing,backend-dotnet}.md` (auto-cargadas) |
 | Subagentes | `.opencode/agents/{backend-dotnet,dotnet-qa}.md` |

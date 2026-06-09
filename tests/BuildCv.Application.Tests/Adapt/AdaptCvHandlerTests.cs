@@ -2,6 +2,7 @@ using BuildCv.Application.Features.Adapt;
 using BuildCv.Domain.Adapt;
 using BuildCv.Domain.Lexicon;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace BuildCv.Application.Tests.Adapt;
@@ -19,7 +20,7 @@ public sealed class AdaptCvHandlerTests
     {
         var gazetteer = new TestGazetteer();
         _extractor = new EntityExtractor(gazetteer);
-        _handler = new AdaptCvHandler(_ai, _extractor, _crossValidator, _severityPolicy, _promptBuilder);
+        _handler = new AdaptCvHandler(_ai, _extractor, _crossValidator, _severityPolicy, _promptBuilder, NullLogger<AdaptCvHandler>.Instance);
     }
 
     [Fact]

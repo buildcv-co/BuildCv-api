@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using BuildCv.Domain.Common;
 using BuildCv.Domain.Export;
+using Microsoft.Extensions.Logging;
 
 namespace BuildCv.Application.Features.Export;
 
@@ -15,11 +16,13 @@ public sealed class ExportPdfHandler
 {
     private readonly IPdfGenerator _generator;
     private readonly ValidationGate _gate;
+    private readonly ILogger<ExportPdfHandler> _logger;
 
-    public ExportPdfHandler(IPdfGenerator generator, ValidationGate gate)
+    public ExportPdfHandler(IPdfGenerator generator, ValidationGate gate, ILogger<ExportPdfHandler> logger)
     {
         _generator = generator;
         _gate = gate;
+        _logger = logger;
     }
 
     public Task<Result<ExportResult>> Handle(ExportPdfCommand command, CancellationToken ct)
@@ -29,7 +32,7 @@ public sealed class ExportPdfHandler
         if (!_gate.CanExport(command.Validation))
         {
             var explanation = _gate.ExplainWhyBlocked(command.Validation);
-            System.Console.WriteLine($"ExportPdfHandler: blocked (hard inventions present)");
+            _logger.LogWarning("Export blocked: hard inventions present");
             return Task.FromResult(Result.Failure<ExportResult>(new Error("EXPORT_BLOCKED_INVENTION", explanation)));
         }
 
@@ -46,7 +49,7 @@ public sealed class ExportPdfHandler
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            System.Console.Error.WriteLine($"ExportPdfHandler: PDF generation failed (error={ex.GetType().Name})");
+            _logger.LogWarning("PDF generation failed (error={ErrorType})", ex.GetType().Name);
             return Task.FromResult(Result.Failure<ExportResult>(new Error("PDF_UNAVAILABLE", "Generación de PDF no disponible temporalmente.")));
         }
         stopwatch.Stop();
@@ -66,8 +69,7 @@ public sealed class ExportPdfHandler
             SizeBytes: pdfBytes.Length,
             Metadata: metadata);
 
-        System.Console.WriteLine(
-            $"Export completed (cvLength={command.AdaptedCv.Length}, fileSize={pdfBytes.Length}, generationTimeMs={stopwatch.ElapsedMilliseconds}, severity={command.Validation.Severity})");
+        _logger.LogInformation("Export completed (cvLength={CvLength}, fileSize={FileSize}, generationTimeMs={GenerationTimeMs}, severity={Severity})", command.AdaptedCv.Length, pdfBytes.Length, stopwatch.ElapsedMilliseconds, command.Validation.Severity);
 
         return Task.FromResult(Result.Success(result));
     }

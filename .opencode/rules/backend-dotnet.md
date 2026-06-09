@@ -91,8 +91,8 @@ public sealed class ScoreCvValidator : AbstractValidator<ScoreCvCommand>
 {
     public ScoreCvValidator()
     {
-        RuleFor(x => x.CvText).NotEmpty().MaximumLength(50_000);
-        RuleFor(x => x.JobText).NotEmpty().MaximumLength(20_000);
+        RuleFor(x => x.CvText).NotEmpty().MinimumLength(200).MaximumLength(20_000);
+        RuleFor(x => x.JobText).NotEmpty().MinimumLength(100).MaximumLength(20_000);
         RuleFor(x => x).Must(NotBeIdentical).WithMessage("El CV y la vacante no pueden ser idénticos.");
     }
 

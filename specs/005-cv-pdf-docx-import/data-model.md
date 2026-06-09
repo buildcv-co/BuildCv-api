@@ -1,437 +1,183 @@
 # Data Model: 005-cv-pdf-docx-import
 
-## Tipos del dominio (inmutables, records, en `BuildCv.Domain/Import/`)
+> **Source of truth:** `src/BuildCv.Application/Features/Import/ImportTypes.cs`, `ICvParser.cs`, `ParserEngineException.cs`, `ImportErrorCodes.cs`, `SectionDetector.cs` (commit `c61bdf4`).
+>
+> **Diferencia con el plan original:** los tipos viven en `Application/Features/Import/` (no en `Domain/Import/`). El directorio `src/BuildCv.Domain/Import/` **NO existe** — la implementación shipped mantiene el Domain PURO (cero packages externos, cero referencias a Application) y pone los records compartidos en Application. La separación de capas es: handler usa Command (Application), parser retorna Result (Application), y el Domain permanece PURO.
 
-> **Cero paquetes externos en Domain** (Constitution Art. VI). Los records siguientes son puros: sin dependencias de PdfPig, OpenXml, ni del SDK de ASP.NET.
-
-```csharp
-namespace BuildCv.Domain.Import;
-
-/// <summary>
-/// Petición de import tal como la entiende el dominio. Se construye en el handler
-/// a partir del IFormFile recibido por el endpoint, pero el dominio no conoce
-/// IFormFile (separación de capas, Constitution Art. VI).
-/// </summary>
-public sealed record ImportRequest(
-    byte[] FileBytes,
-    string MimeDeclared,
-    string FileName,
-    string TraceId);
-
-/// <summary>
-/// Resultado del parseo. Es la "semilla" que el editor (006) consume para
-/// mostrar el CV al usuario antes de pegarlo al score (002) o adapt (003).
-/// </summary>
-public sealed record ImportResult(
-    string Text,
-    IReadOnlyList<DetectedSection> Sections,
-    IReadOnlyList<ImportWarning> Warnings,
-    string EngineVersion,
-    string TraceId);
-
-/// <summary>
-/// Sección detectada por heurística de regex. confidence: High si la línea
-/// contiene solo el header; Low si hay puntuación, palabras adicionales o
-/// subcadena dentro de un párrafo.
-/// </summary>
-public sealed record DetectedSection(
-    string Heading,
-    int Start,
-    int End,
-    string Confidence);   // "High" | "Low"
-
-/// <summary>
-/// Aviso no bloqueante sobre el resultado del parseo. Severity: Info (imágenes
-/// omitidas), Warning (encoding normalizado, sección ambigua), Error (escaneado,
-/// cifrado — pero los Error bloqueantes se mapean a excepción de dominio y
-/// 422, no se mezclan aquí).
-/// </summary>
-public sealed record ImportWarning(
-    string Code,
-    string Message,
-    string Severity);     // "Info" | "Warning" | "Error"
-```
-
-## Excepciones de dominio (`BuildCv.Domain/Import/Exceptions/`)
-
-El parser lanza estas excepciones tipadas; el handler las mapea a códigos de error HTTP.
-
-```csharp
-namespace BuildCv.Domain.Import.Exceptions;
-
-public abstract class ImportException : Exception
-{
-    public abstract string Code { get; }
-    public abstract int HttpStatus { get; }
-    protected ImportException(string message) : base(message) { }
-    protected ImportException(string message, Exception inner) : base(message, inner) { }
-}
-
-public sealed class PdfEncryptedException : ImportException
-{
-    public override string Code => "IMPORT_PDF_ENCRYPTED";
-    public override int HttpStatus => 422;
-    public PdfEncryptedException() : base("PDF cifrado.") { }
-}
-
-public sealed class ScannedPdfException : ImportException
-{
-    public override string Code => "IMPORT_SCANNED_PDF";
-    public override int HttpStatus => 422;
-    public ScannedPdfException() : base("PDF basado en imágenes, sin texto extraíble.") { }
-}
-
-public sealed class DocxProtectedException : ImportException
-{
-    public override string Code => "IMPORT_DOCX_PROTECTED";
-    public override int HttpStatus => 422;
-    public DocxProtectedException() : base("DOCX protegido con contraseña.") { }
-}
-
-public sealed class DocxNoTextException : ImportException
-{
-    public override string Code => "IMPORT_DOCX_NO_TEXT";
-    public override int HttpStatus => 422;
-    public DocxNoTextException() : base("DOCX sin texto extraíble.") { }
-}
-
-public sealed class TooManyPagesException : ImportException
-{
-    public override string Code => "IMPORT_TOO_MANY_PAGES";
-    public override int HttpStatus => 422;
-    public int PageCount { get; }
-    public TooManyPagesException(int pageCount)
-        : base($"Documento con {pageCount} páginas (máx. 100).")
-    {
-        PageCount = pageCount;
-    }
-}
-
-public sealed class EmptyFileException : ImportException
-{
-    public override string Code => "IMPORT_EMPTY_FILE";
-    public override int HttpStatus => 422;
-    public EmptyFileException() : base("Archivo vacío.") { }
-}
-
-public sealed class UnsupportedMediaException : ImportException
-{
-    public override string Code => "IMPORT_UNSUPPORTED_MEDIA";
-    public override int HttpStatus => 415;
-    public UnsupportedMediaException(string mime) : base($"MIME no soportado: {mime}.") { }
-}
-
-public sealed class TooLargeException : ImportException
-{
-    public override string Code => "IMPORT_TOO_LARGE";
-    public override int HttpStatus => 413;
-    public long SizeBytes { get; }
-    public TooLargeException(long sizeBytes)
-        : base($"Archivo de {sizeBytes} bytes (máx. 5 MB).")
-    {
-        SizeBytes = sizeBytes;
-    }
-}
-```
-
-## Servicio de dominio: heurística de secciones
-
-```csharp
-namespace BuildCv.Domain.Import;
-
-/// <summary>
-/// Detecta secciones candidatas por regex sobre headers en MAYÚSCULAS.
-/// Es una función pura: entra texto, sale lista de DetectedSection. Sin IO.
-/// </summary>
-public static class SectionHeuristics
-{
-    private static readonly System.Text.RegularExpressions.Regex HeaderPattern = new(
-        @"^\s*(?<heading>" + string.Join("|", SectionRegexPatterns.AllHeaders) + @")\s*$",
-        System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.Multiline);
-
-    public static IReadOnlyList<DetectedSection> Detect(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return Array.Empty<DetectedSection>();
-        }
-
-        var matches = HeaderPattern.Matches(text);
-        var sections = new List<DetectedSection>(matches.Count);
-
-        for (int i = 0; i < matches.Count; i++)
-        {
-            var m = matches[i];
-            var heading = m.Groups["heading"].Value;
-            var start = m.Index + m.Length;
-            var end = i + 1 < matches.Count ? matches[i + 1].Index : text.Length;
-
-            // Confidence: High si la línea solo tiene el header (sin puntuación ni más palabras).
-            var line = text.Substring(m.Index, m.Length).Trim();
-            var confidence = line.Equals(heading, StringComparison.Ordinal) ? "High" : "Low";
-
-            sections.Add(new DetectedSection(heading, start, end, confidence));
-        }
-
-        return sections;
-    }
-}
-
-public static class SectionRegexPatterns
-{
-    public static readonly string[] Spanish = new[]
-    {
-        "EXPERIENCIA", "EDUCACION", "EDUCACIÓN", "HABILIDADES",
-        "PROYECTOS", "CONTACTO", "PERFIL", "RESUMEN",
-        "IDIOMAS", "CERTIFICACIONES", "REFERENCIAS", "PUBLICACIONES"
-    };
-
-    public static readonly string[] English = new[]
-    {
-        "EXPERIENCE", "EDUCATION", "SKILLS", "PROJECTS",
-        "CONTACT", "PROFILE", "SUMMARY", "LANGUAGES",
-        "CERTIFICATIONS", "REFERENCES", "PUBLICATIONS"
-    };
-
-    public static readonly string[] AllHeaders = Spanish.Concat(English).ToArray();
-}
-```
-
-## Tipos de Application (puertos y handler)
+## Application Types (inmutables, records, en `BuildCv.Application/Features/Import/ImportTypes.cs`)
 
 ```csharp
 namespace BuildCv.Application.Features.Import;
 
-using BuildCv.Domain.Import;
+/// <summary>
+/// Comando inmutable para importar un CV. La unidad de aplicación (handler)
+/// orquesta validación, parseo y mapeo de errores. El endpoint construye
+/// este record a partir del IFormFile multipart.
+/// </summary>
+public sealed record ImportCvCommand(
+    byte[] FileBytes,
+    string MimeType,
+    string OriginalFileName,
+    string TraceId);
+
+/// <summary>Sección candidata detectada por la heurística de regex.</summary>
+public sealed record ImportSection(
+    string Heading,
+    int Start,
+    int End,
+    string Confidence);  // "High" | "Low"
+
+/// <summary>Aviso no bloqueante sobre el resultado del parseo.</summary>
+public sealed record ImportWarning(
+    string Code,
+    string Message,
+    string Severity);  // "Info" | "Warning" | "Error"
 
 /// <summary>
-/// Puerto de parseo (Constitution Art. VI v1.1.0: ICvParser es un puerto oficial).
+/// Resultado del parseo. Es la semilla que consume el editor (006) y, vía
+/// este editor, el score (002) y la adaptación (003).
+/// </summary>
+public sealed record ImportResult(
+    string Text,
+    IReadOnlyList<ImportSection> Sections,
+    IReadOnlyList<ImportWarning> Warnings,
+    string EngineVersion,
+    string TraceId);
+```
+
+## Excepción de Application (`BuildCv.Application/Features/Import/ParserEngineException.cs`)
+
+> **Diferencia con el plan original:** NO existe una jerarquía de 8 excepciones de dominio en `BuildCv.Domain/Import/Exceptions/`. La implementación shipped usa **una sola** excepción `ParserEngineException` (en `Application/`) con un campo `Code` string estable. Esto simplifica el mapeo a HTTP y elimina la proliferación de tipos.
+
+```csharp
+namespace BuildCv.Application.Features.Import;
+
+/// <summary>
+/// Excepción de motor: el parser encontró algo que sabe clasificar (PDF cifrado,
+/// DOCX protegido, etc.) y lo traduce a un código estable mapeable a HTTP.
+/// Vive en Application porque el handler (Application) la lanza tras mapear
+/// el código que el adaptador (Infrastructure) reporta.
+/// </summary>
+public sealed class ParserEngineException : Exception
+{
+    public string Code { get; }
+
+    public ParserEngineException(string code, string message)
+        : base(message)
+    {
+        Code = code;
+    }
+}
+```
+
+## Catálogo de códigos de error (`BuildCv.Application/Features/Import/ImportErrorCodes.cs`)
+
+```csharp
+namespace BuildCv.Application.Features.Import;
+
+public static class ImportErrorCodes
+{
+    public const string Validation = "IMPORT_VALIDATION";
+    public const string TooLarge = "IMPORT_TOO_LARGE";
+    public const string UnsupportedMedia = "IMPORT_UNSUPPORTED_MEDIA";
+
+    public const string PdfEncrypted = "IMPORT_PDF_ENCRYPTED";
+    public const string ScannedPdf = "IMPORT_SCANNED_PDF";
+    public const string DocxProtected = "IMPORT_DOCX_PROTECTED";
+    public const string DocxNoText = "IMPORT_DOCX_NO_TEXT";
+    public const string TooManyPages = "IMPORT_TOO_MANY_PAGES";
+    public const string EmptyFile = "IMPORT_EMPTY_FILE";
+    public const string InvalidPdf = "IMPORT_INVALID_PDF";
+    public const string InvalidDocx = "IMPORT_INVALID_DOCX";
+
+    public const string EngineError = "IMPORT_ENGINE_ERROR";
+}
+```
+
+## Puerto `ICvParser` (`BuildCv.Application/Features/Import/ICvParser.cs`)
+
+```csharp
+namespace BuildCv.Application.Features.Import;
+
+/// <summary>
+/// Puerto de parseo de archivos (Constitution Art. VI v1.1.0 — ICvParser).
+/// Los adaptadores concretos (PdfPig, OpenXml) viven en Infrastructure.
 /// </summary>
 public interface ICvParser
 {
-    /// <summary>
-    /// Parsea el archivo y devuelve un ImportResult. Lanza ImportException
-    /// en errores bloqueantes (cifrado, escaneado, protegido, vacío, etc.).
-    /// </summary>
-    ImportResult Parse(ImportRequest request);
+    ImportResult Parse(ImportCvCommand command);
 }
-
-/// <summary>
-/// Servicio de aplicación que orquesta: validator (FluentValidation) → parser.
-/// </summary>
-public sealed record ImportCvCommand(byte[] FileBytes, string MimeDeclared, string FileName) : IRequest<Result<ImportResult>>;
 ```
 
-## Adaptadores de Infrastructure (en `BuildCv.Infrastructure/Parsing/`)
+## Servicio de aplicación: detector de secciones (`SectionDetector.cs`)
 
-> Aquí sí se referencian PdfPig y OpenXml. Aislados en esta capa.
+> **Diferencia con el plan original:** NO existen `SectionHeuristics.cs` ni `SectionRegexPatterns.cs` como archivos separados en Domain. La lógica equivalente vive en `Application/Features/Import/SectionDetector.cs` (instancia de clase, no static helper, para mantener testabilidad con DI). El comportamiento es el del plan: regex sobre headers en MAYÚSCULAS (ES + EN), `confidence: High` si la línea solo tiene el header, `Low` si hay puntuación o subcadena.
+
+## Compuesto `ParserRouter` (Infrastructure, en lugar de un dispatcher separado)
+
+> **Diferencia con el plan original:** NO existe `CvParserDispatcher.cs` separado. La única `ICvParser` registrada en DI es `ParserRouter`, que internamente despacha al parser concreto (`PdfPigCvParser` o `OpenXmlCvParser`) según MIME declarado y magic bytes. La validación de magic bytes está inline en `ParserRouter.EnsureMagicBytes` (helper estático privado); no hay archivos `PdfMagicBytes.cs` ni `OpenXmlMagicBytes.cs` separados.
 
 ```csharp
 namespace BuildCv.Infrastructure.Parsing;
 
-using BuildCv.Application.Features.Import;
-using BuildCv.Domain.Import;
-using BuildCv.Domain.Import.Exceptions;
-using UglyToad.PdfPig;
-
-public sealed class PdfPigCvParser : ICvParser
+public sealed class ParserRouter : ICvParser
 {
-    public ImportResult Parse(ImportRequest request)
+    private readonly PdfPigCvParser _pdfParser;
+    private readonly OpenXmlCvParser _docxParser;
+
+    public ParserRouter(PdfPigCvParser pdfParser, OpenXmlCvParser docxParser)
     {
-        if (request.FileBytes.Length == 0) throw new EmptyFileException();
-
-        try
-        {
-            using var document = PdfDocument.Open(request.FileBytes);
-            var pageCount = document.NumberOfPages;
-            if (pageCount > 100) throw new TooManyPagesException(pageCount);
-
-            var sb = new System.Text.StringBuilder();
-            var warnings = new List<ImportWarning>();
-            var textLengthAcrossPages = 0;
-
-            foreach (var page in document.GetPages())
-            {
-                var pageText = page.Text ?? string.Empty;
-                textLengthAcrossPages += pageText.Length;
-
-                // Detección de PDF escaneado: si 0 chars de texto en todas las páginas
-                // y el PDF tiene más de 0 páginas → no es un PDF de texto.
-                // (Chequeo se hace al final.)
-
-                sb.AppendLine(pageText);
-            }
-
-            var text = sb.ToString().Trim();
-
-            if (textLengthAcrossPages == 0)
-            {
-                throw new ScannedPdfException();
-            }
-
-            // Truncar si excede 50k chars (coherente con FR-037)
-            if (text.Length > 50_000)
-            {
-                warnings.Add(new ImportWarning(
-                    "TEXT_TRUNCATED",
-                    $"Texto truncado de {text.Length} a 50000 caracteres.",
-                    "Warning"));
-                text = text.Substring(0, 50_000);
-            }
-
-            var sections = SectionHeuristics.Detect(text);
-            if (sections.Count == 0)
-            {
-                warnings.Add(new ImportWarning(
-                    "NO_SECTIONS_DETECTED",
-                    "No se detectaron secciones por heurística. El editor permitirá marcarlas manualmente.",
-                    "Info"));
-            }
-
-            return new ImportResult(
-                text,
-                sections,
-                warnings,
-                EngineVersion: "1.0.0",
-                TraceId: request.TraceId);
-        }
-        catch (PdfDocumentEncryptedException)
-        {
-            throw new PdfEncryptedException();
-        }
+        _pdfParser = pdfParser;
+        _docxParser = docxParser;
     }
+
+    public ImportResult Parse(ImportCvCommand command)
+    {
+        var mime = command.MimeType?.Trim() ?? string.Empty;
+
+        if (mime.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            EnsureMagicBytes(command.FileBytes, expectedPdfMagic: true);
+            return _pdfParser.Parse(command);
+        }
+
+        if (mime.Equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document", StringComparison.OrdinalIgnoreCase))
+        {
+            EnsureMagicBytes(command.FileBytes, expectedPdfMagic: false);
+            return _docxParser.Parse(command);
+        }
+
+        throw new ParserEngineException(
+            "UNSUPPORTED_MIME",
+            $"Tipo de archivo no soportado: {mime}. Sube un PDF o DOCX.");
+    }
+
+    private static void EnsureMagicBytes(byte[] bytes, bool expectedPdfMagic) { /* inline: %PDF- o PK\x03\x04 */ }
 }
 ```
 
-```csharp
-namespace BuildCv.Infrastructure.Parsing;
-
-using BuildCv.Application.Features.Import;
-using BuildCv.Domain.Import;
-using BuildCv.Domain.Import.Exceptions;
-using DocumentFormat.OpenXml;
-using DocumentFormat.OpenXml.Packaging;
-
-public sealed class OpenXmlCvParser : ICvParser
-{
-    public ImportResult Parse(ImportRequest request)
-    {
-        if (request.FileBytes.Length == 0) throw new EmptyFileException();
-
-        try
-        {
-            using var ms = new MemoryStream(request.FileBytes);
-            using var doc = WordprocessingDocument.Open(ms, false);
-
-            var body = doc.MainDocumentPart?.Document?.Body;
-            if (body is null) throw new DocxNoTextException();
-
-            var sb = new System.Text.StringBuilder();
-            var warnings = new List<ImportWarning>();
-            var imageCount = 0;
-
-            foreach (var element in body.Elements())
-            {
-                if (element is DocumentFormat.OpenXml.Wordprocessing.Paragraph p)
-                {
-                    var text = p.InnerText;
-                    if (!string.IsNullOrWhiteSpace(text))
-                    {
-                        sb.AppendLine(text);
-                    }
-                }
-                else if (element is DocumentFormat.OpenXml.Wordprocessing.Table t)
-                {
-                    foreach (var row in t.Elements<DocumentFormat.OpenXml.Wordprocessing.TableRow>())
-                    {
-                        var cells = row.Elements<DocumentFormat.OpenXml.Wordprocessing.TableCell>()
-                            .Select(c => c.InnerText);
-                        sb.AppendLine(string.Join('\t', cells));
-                    }
-                }
-                else if (element is DocumentFormat.OpenXml.Wordprocessing.SdtBlock sdt)
-                {
-                    // Contenido estructurado (controles, contenido reutilizable): tratarlo como párrafo.
-                    var text = sdt.InnerText;
-                    if (!string.IsNullOrWhiteSpace(text))
-                    {
-                        sb.AppendLine(text);
-                    }
-                }
-            }
-
-            // Contar imágenes referenciadas en el documento.
-            imageCount = doc.MainDocumentPart?.ImageParts?.Count() ?? 0;
-            if (imageCount > 0)
-            {
-                warnings.Add(new ImportWarning(
-                    "IMAGE_OMITTED",
-                    $"Se omitieron {imageCount} imagen(es).",
-                    "Info"));
-            }
-
-            var text = sb.ToString().Trim();
-            if (text.Length == 0) throw new DocxNoTextException();
-
-            if (text.Length > 50_000)
-            {
-                warnings.Add(new ImportWarning(
-                    "TEXT_TRUNCATED",
-                    $"Texto truncado de {text.Length} a 50000 caracteres.",
-                    "Warning"));
-                text = text.Substring(0, 50_000);
-            }
-
-            var sections = SectionHeuristics.Detect(text);
-            if (sections.Count == 0)
-            {
-                warnings.Add(new ImportWarning(
-                    "NO_SECTIONS_DETECTED",
-                    "No se detectaron secciones por heurística. El editor permitirá marcarlas manualmente.",
-                    "Info"));
-            }
-
-            return new ImportResult(
-                text,
-                sections,
-                warnings,
-                EngineVersion: "1.0.0",
-                TraceId: request.TraceId);
-        }
-        catch (OpenXmlPackageException) when (IsPasswordProtection(/*...*/))
-        {
-            throw new DocxProtectedException();
-        }
-        catch (OpenXmlPackageException)
-        {
-            throw new UnsupportedMediaException(request.MimeDeclared);
-        }
-    }
-}
-```
-
-## Tipos de API (DTOs HTTP)
+## Tipos de API (DTOs HTTP, en `BuildCv.Api/Contracts/ImportContracts.cs`)
 
 ```csharp
 namespace BuildCv.Api.Contracts;
 
+public sealed record ImportSectionDto(string Heading, int Start, int End, string Confidence);
+
+public sealed record ImportWarningDto(string Code, string Message, string Severity);
+
 public sealed record ImportResponseDto(
     string Text,
-    IReadOnlyList<SectionDto> Sections,
-    IReadOnlyList<WarningDto> Warnings,
+    IReadOnlyList<ImportSectionDto> Sections,
+    IReadOnlyList<ImportWarningDto> Warnings,
     string EngineVersion,
     string TraceId);
-
-public sealed record SectionDto(string Heading, int Start, int End, string Confidence);
-
-public sealed record WarningDto(string Code, string Message, string Severity);
 
 public static class ImportResponseMapper
 {
     public static ImportResponseDto Map(ImportResult result) => new(
         result.Text,
-        result.Sections.Select(s => new SectionDto(s.Heading, s.Start, s.End, s.Confidence)).ToList(),
-        result.Warnings.Select(w => new WarningDto(w.Code, w.Message, w.Severity)).ToList(),
+        result.Sections.Select(s => new ImportSectionDto(s.Heading, s.Start, s.End, s.Confidence)).ToList(),
+        result.Warnings.Select(w => new ImportWarningDto(w.Code, w.Message, w.Severity)).ToList(),
         result.EngineVersion,
         result.TraceId);
 }
@@ -441,16 +187,17 @@ public static class ImportResponseMapper
 
 ```
 ImportEndpoints.POST /api/v1/import
-├── 1. Kestrel MaxRequestBodySize = 6_000_000         [413 si > 6 MB]
-├── 2. ImportCvValidator.ValidateAndThrow(cmd)        [400 si falla]
-│      ├── FileBytes.Length > 0                       [IMPORT_EMPTY_FILE → 400]
-│      ├── FileBytes.Length ≤ 5_000_000               [IMPORT_TOO_LARGE → 400]
-│      └── MimeDeclared ∈ {pdf, docx}                 [400 con detalle]
-├── 3. ICvParserDispatcher.Dispatch(cmd)              [selecciona PdfPig u OpenXml]
-│      ├── Magic bytes check                          [415 si no coincide]
-│      └── Parse(request)                             [puede lanzar ImportException → mapeo]
-├── 4. RequireRateLimiting("import") 30/h             [429 si excede]
-└── 5. Return ImportResponseDto (200)
+├── 1. Kestrel MaxRequestBodySize (5 MB + overhead multipart)  [413 si excede]
+├── 2. ImportCvValidator.Validate(cmd)                        [400 si falla]
+│      ├── FileBytes.Length > 0                                [IMPORT_EMPTY_FILE → 400]
+│      ├── FileBytes.Length ≤ 5_000_000                        [IMPORT_TOO_LARGE → 400]
+│      └── MimeType ∈ {application/pdf, ...wordprocessingml...document}
+│                                                               [400 con detalle]
+├── 3. ICvParser.Parse(cmd)                                     [ParserRouter despacha]
+│      ├── Magic bytes check (inline en ParserRouter)           [415 si no coincide]
+│      └── PdfPigCvParser.Parse / OpenXmlCvParser.Parse         [puede lanzar ParserEngineException → mapeo a 4xx/5xx]
+├── 4. RequireRateLimiting("import") 30/h                       [429 si excede]
+└── 5. Return ImportResponseDto (200) o ProblemDetails (4xx/5xx)
 ```
 
 ## Máquina de estados (errores)
@@ -467,9 +214,9 @@ ImportEndpoints.POST /api/v1/import
 [Magic bytes] ──mismatch──→ [415 ProblemDetails: IMPORT_UNSUPPORTED_MEDIA]
    ↓ match
 [Parse]
-   ├── ImportException (cifrado/escaneado/protegido) → [422 ProblemDetails]
-   ├── Success                                          → [200 ImportResult JSON]
-   └── Unexpected exception                             → [503 ProblemDetails: IMPORT_ENGINE_ERROR]
+   ├── ParserEngineException (UNSUPPORTED_MIME/INVALID_PDF/IMPORT_PDF_ENCRYPTED/IMPORT_SCANNED_PDF/IMPORT_DOCX_PROTECTED/IMPORT_DOCX_NO_TEXT/IMPORT_TOO_MANY_PAGES/IMPORT_EMPTY_FILE/IMPORT_INVALID_DOCX) → [4xx ProblemDetails con `code`]
+   ├── Success                                                                              → [200 ImportResult JSON]
+   └── Unexpected exception                                                                → [503 ProblemDetails: IMPORT_ENGINE_ERROR]
 ```
 
 ## Persistencia
@@ -484,7 +231,7 @@ ImportEndpoints.POST /api/v1/import
 // En BuildCv-web/lib/api/import.ts (Zod schema)
 import { z } from "zod";
 
-export const DetectedSectionSchema = z.object({
+export const ImportSectionSchema = z.object({
   heading: z.string().min(1).max(100),
   start: z.number().int().min(0),
   end: z.number().int().min(0),
@@ -499,14 +246,14 @@ export const ImportWarningSchema = z.object({
 
 export const ImportResultSchema = z.object({
   text: z.string().max(50_000),
-  sections: z.array(DetectedSectionSchema).max(50),
+  sections: z.array(ImportSectionSchema).max(50),
   warnings: z.array(ImportWarningSchema).max(20),
   engineVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
   traceId: z.string().min(1).max(100),
 });
 
 export type ImportResult = z.infer<typeof ImportResultSchema>;
-export type DetectedSection = z.infer<typeof DetectedSectionSchema>;
+export type ImportSection = z.infer<typeof ImportSectionSchema>;
 export type ImportWarning = z.infer<typeof ImportWarningSchema>;
 ```
 

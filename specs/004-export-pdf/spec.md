@@ -2,7 +2,7 @@
 
 **Feature Branch**: `004-export-pdf`
 **Created**: 2026-06-08
-**Status**: Draft
+**Status**: ✅ SHIPPED (commit 635d688, 2026-06-09)
 **Input**: User description: "Exportar el CV adaptado a PDF para descarga inmediata"
 
 > **Frontend counterpart:** [../../../BuildCv-web/specs/004-web-export-ui/](../../../BuildCv-web/specs/004-web-export-ui/)

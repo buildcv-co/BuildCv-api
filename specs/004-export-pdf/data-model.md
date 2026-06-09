@@ -81,6 +81,12 @@ namespace BuildCv.Infrastructure.Pdf;
 
 public sealed class QuestPdfGenerator : IPdfGenerator
 {
+    /// <summary>
+    /// Constructor estático: configura la licencia Community de QuestPDF antes
+    /// de la primera generación. NO se hace en Program.cs (la lib exige setear
+    /// la licencia antes de GeneratePdf, y el constructor estático se ejecuta
+    /// al primer uso del tipo, garantizando que está lista).
+    /// </summary>
     static QuestPdfGenerator()
     {
         QuestPDF.Settings.License = LicenseType.Community;

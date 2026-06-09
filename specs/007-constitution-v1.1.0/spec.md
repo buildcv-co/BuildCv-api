@@ -1,6 +1,6 @@
 # Feature 007 — Enmienda de la Constitution v1.0.0 → v1.1.0
 
-> **Status:** 📋 PLANEADO (artifact governance) · **Tipo:** Enmienda formal, NO feature de código
+> **Status:** ✅ RATIFICADA (commit 4b3be4a, 2026-06-09) · **Tipo:** Enmienda formal, NO feature de código
 > **Owner approval required:** SÍ (proceso documentado en Constitution §Gobernanza)
 > **Próxima:** [`../000-INDEX.md`](../000-INDEX.md)
 
@@ -54,9 +54,9 @@ Se redacta este change con:
 | `specs/003-adapt-ia/spec.md` | Sin cambios (sigue compatible, su StubAiClient sigue válido) |
 | `specs/004-export-pdf/spec.md` | Sin cambios |
 | `specs/005-cv-pdf-docx-import/spec.md` (NUEVO) | Se crea bajo v1.1.0 |
-| `specs/006-cv-editor/spec.md` (NUEVO) | Se crea bajo v1.1.0 |
+| `specs/006-cv-editor/spec.md` (NUEVO) | Se crea en `BuildCv-web/specs/006-web-cv-editor/` (frontend, no en el API) |
 | `BuildCv-web/AGENTS.md` | Actualizar referencia a Constitution v1.1.0 |
-| `BuildCv-api/AGENTS.md` | Actualizar referencia a Constitution v1.1.0 |
+| `BuildCv-api/AGENTS.md` | Actualizar referencia a Constitution v1.1.0 ✅ DONE (v1.0.0 → v1.1.0 en línea de Constitución + Art. VII con 4 políticas) |
 
 ### 3. Aprobación
 

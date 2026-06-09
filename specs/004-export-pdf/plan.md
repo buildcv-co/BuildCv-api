@@ -74,57 +74,51 @@ specs/004-export-pdf/
 └── tasks.md             # Phase 2: Implementation tasks (TDD-ordered)
 ```
 
-### Source Code
+### Source Code (shipped, commit `635d688`)
 
 ```
 src/BuildCv.Domain/                                  # PURO — no nuevos packages
-├── Export/
-│   ├── ExportRequest.cs                             # Record: { AdaptedCv, Validation, CandidateName }
-│   ├── ExportResult.cs                              # Record: { byte[] Pdf, string Filename, int SizeBytes }
-│   ├── PdfMetadata.cs                               # { GeneratedAt, EngineVersion, Severity, Inventions }
-│   └── ValidationGate.cs                            # Domain service: puede exportar dado ValidationReport
+└── Export/
+    └── ExportTypes.cs                               # Combined: ExportRequest, ExportResult, PdfMetadata, ValidationGate (un único archivo)
 
 src/BuildCv.Application/                             # + Application services
-├── Features/Export/
-│   ├── ExportPdfCommand.cs                          # { AdaptedCv, Validation, CandidateName }
-│   ├── ExportPdfHandler.cs                          # Orquesta: validate gate → call IPdfGenerator → return
-│   ├── ExportPdfValidator.cs                        # FluentValidation: cv no vacío, ≤50k, candidate name
-│   ├── IPdfGenerator.cs                             # Puerto: GeneratePdf(ExportRequest) → byte[]
+└── Features/Export/
+    ├── IPdfGenerator.cs                             # Puerto: byte[] GeneratePdf(ExportRequest)
+    ├── ExportPdfValidator.cs                        # Tamaño, candidato
+    └── ExportPdfHandler.cs                          # Orquesta: ValidationGate → IPdfGenerator → return
 
-src/BuildCv.Infrastructure/                          # + QuestPDF NuGet
-├── Pdf/
-│   ├── QuestPdfGenerator.cs                         # Implementación IPdfGenerator
-│   ├── PdfLayout.cs                                 # Builder del layout con secciones
-│   └── Watermark.cs                                 # Footer con "no es ATS oficial"
+src/BuildCv.Infrastructure/                          # + QuestPDF 2024.7.3
+└── Pdf/
+    └── QuestPdfGenerator.cs                         # Implementación IPdfGenerator (133 líneas, layout inline; el parser markdown es un método privado)
 
 src/BuildCv.Api/                                     # + endpoint /api/v1/export
-├── Endpoints/ExportEndpoints.cs                     # POST → retorna File(bytes, "application/pdf", filename)
-└── Security/RateLimiting.cs                         # EXTENDER: agregar política "export" (20/h)
+├── Contracts/ExportContracts.cs                     # ExportRequestDto + ExportResponseMapper (29 líneas)
+├── Endpoints/ExportEndpoints.cs                     # POST → File(bytes, "application/pdf", filename)
+└── Security/RateLimiting.cs                         # Política "export" 20/h (constante ExportPolicy)
 ```
+
+> **Diferencias con el plan original:** la implementación shipped consolidó los tipos de dominio en un único `ExportTypes.cs` (en vez de archivos separados por record), e inlineó el layout + parser markdown en `QuestPdfGenerator.cs` (en vez de clases separadas `PdfLayout.cs` / `Watermark.cs`). Ambos son refactors de organización; el contrato externo y el comportamiento son los del plan.
 
 ### Tests
 
 ```
 tests/BuildCv.Domain.Tests/Export/
-├── ValidationGateTests.cs                          # Decide si export pasa (None/Warning → OK, Critical → block)
+└── ValidationGateTests.cs                           # Decide si export pasa (None/Warning → OK, Critical → block)
 
 tests/BuildCv.Application.Tests/Export/
-├── ExportPdfValidatorTests.cs                       # Tamaño, nombre candidato
-├── ExportPdfHandlerTests.cs                         # Gate + IPdfGenerator mock
-└── IPdfGeneratorContractTests.cs                    # Fake implementation cumple contrato
-
-tests/BuildCv.Api.IntegrationTests/Export/
-├── ExportEndpointTests.cs                           # Wire-up HTTP, rate-limit "export", 422 invention
-└── ExportPdfIntegrationTests.cs                     # Bytes válidos, filename, content-type
+├── ExportPdfValidatorTests.cs                       # Tamaño, candidato
+└── ExportPdfHandlerTests.cs                         # Gate + IPdfGenerator fake
 ```
+
+> **Diferencias con el plan original:** `IPdfGeneratorContractTests.cs` y `ExportPdfIntegrationTests.cs` no existen como archivos separados — la cobertura del contrato del fake está dentro de `ExportPdfHandlerTests` y la integración del endpoint se valida manualmente con curl. Los tests de `BuildCv.Api.IntegrationTests/` no incluyen 004 (el endpoint no tiene tests de integración automatizados; verificación e2e con curl).
 
 ## Phase 0 — Research
 
-- **QuestPDF NuGet package**: v2024.x, API fluida (`Document.Create(container => {...})`).
-- **Community license**: requiere `LicenseType.Community` en `Program.cs`.
-- **Layout sections**: header, content (skills, experiencia, educación), footer.
-- **Styling**: fonts (`FontFamily.Calibri` default), colors (`Colors.Grey.Medium`), sizes (`TextStyle.Default.Size(10)`).
-- **Memory rendering**: `Document.Generate(stream)` retorna `MemoryStream` con `byte[]`.
+- **QuestPDF NuGet package**: v2024.x (shipped: `QuestPDF 2024.7.3`), API fluida (`Document.Create(container => {...})`).
+- **Community license**: `QuestPDF.Settings.License = LicenseType.Community;` se setea en el **constructor estático de `QuestPdfGenerator`** (`src/BuildCv.Infrastructure/Pdf/QuestPdfGenerator.cs:16-19`), **NO** en `Program.cs`. Esto garantiza que la licencia esté configurada antes de la primera generación, independientemente de cuándo se resuelva el DI.
+- **Layout sections**: header (nombre candidato + fecha), content (markdown parseado: h1/h2/listas/párrafos), footer (marca de agua con fecha, encuadre honesto, atribución QuestPDF Community).
+- **Styling**: `Fonts.Calibri` default, `Colors.Grey.Medium` y `Colors.Grey.Lighten1`, font sizes 8-20.
+- **Memory rendering**: `Document.GeneratePdf(stream)` retorna `MemoryStream` con `byte[]`.
 - **Unicode support**: QuestPDF soporta UTF-8 out of the box para español (á é í ó ú ñ).
 
 ## Phase 1 — Design

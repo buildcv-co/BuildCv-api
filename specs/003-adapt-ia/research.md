@@ -1,6 +1,8 @@
 # Research: 003-adapt-ia
 
-**Date**: 2026-06-08 | **Status**: Phase 0 complete
+**Date**: 2026-06-08 (research) / 2026-06-09 (banner HISTÓRICO post-implementación) | **Status**: Phase 0 complete + banner post-shipped
+
+> **⚠️ HISTORICAL — pre-implementation research.** La implementación REJECTED Anthropic.SDK, SSE streaming, y auto-regen. Se shipped un `StubAiClient` determinista (sin LLM real) que retorna adaptations controladas para testing. Ver `tasks.md` para la decisión arquitectónica explícita y commit `68baaf2` para el código shipped. La investigación que sigue representa el espacio de diseño evaluado antes de tomar la decisión v0; sirve como precedente cuando se reabra la decisión en v1 con un LLM real detrás del mismo puerto `IAiClient`.
 
 ## 1. Anthropic SDK para .NET
 

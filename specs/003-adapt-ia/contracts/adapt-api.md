@@ -1,8 +1,10 @@
 # Contracts: 003-adapt-ia
 
+> **Reality check (post-shipped, commit `68baaf2`):** La implementación shipped NO incluye SSE ni endpoint `/api/v1/adapt/stream`. El endpoint es **únicamente** `POST /api/v1/adapt` sincrónico. La IAiClient implementada es `StubAiClient` (sin LLM real). El spec original proponía un endpoint SSE y `AnthropicAiClient` — ambos fueron rechazados para v0 y quedan como follow-up v1 detrás del mismo puerto `IAiClient`.
+
 ## HTTP Contracts
 
-### POST /api/v1/adapt (sincrónico)
+### POST /api/v1/adapt (síncrono, v0)
 
 ```http
 POST /api/v1/adapt HTTP/1.1
@@ -18,10 +20,12 @@ Content-Type: application/json
 }
 ```
 
+> **No** hay `bool stream` en el request. El endpoint es sincrónico en v0.
+
 **Response 200 OK**:
 ```json
 {
-  "adaptedCv": "string (max 50000)",
+  "adaptedCv": "string",
   "validation": {
     "isValid": true,
     "severity": "None|Warning|Critical",
@@ -40,6 +44,8 @@ Content-Type: application/json
   "aiModel": "claude-sonnet-4-20250514"
 }
 ```
+
+> El campo `aiModel` reporta `"claude-sonnet-4-20250514"` por consistencia del contrato, pero la implementación actual es `StubAiClient` (sin LLM real). En v1, cuando se habilite `AnthropicAiClient`, este campo reflejará el modelo real.
 
 **Response 400 Bad Request** (validation):
 ```json
@@ -68,7 +74,7 @@ Content-Type: application/json
 }
 ```
 
-**Response 503 Service Unavailable** (IA down):
+**Response 503 Service Unavailable** (IA down / stub threw):
 ```json
 {
   "type": "https://tools.ietf.org/html/rfc7231#section-6.6.4",
@@ -80,100 +86,65 @@ Content-Type: application/json
 }
 ```
 
-### GET /api/v1/adapt/stream (SSE)
+### ~~GET /api/v1/adapt/stream (SSE)~~ — NO IMPLEMENTADO EN v0
 
-```http
-GET /api/v1/adapt/stream HTTP/1.1
-Host: api.buildcv.app
-Content-Type: application/json
-Accept: text/event-stream
-
-{
-  "cvText": "string",
-  "jobText": "string"
-}
-```
-
-**Response 200 OK** (text/event-stream):
-
-```
-event: start
-data: {"requestId": "abc-123", "timestamp": "2026-06-08T14:30:00Z"}
-
-event: token
-data: {"text": "Juan"}
-
-event: token
-data: {"text": " Pérez"}
-
-event: token
-data: {"text": ". Backend"}
-
-: ping
-: ping
-
-event: validation
-data: {"isValid": true, "severity": "None", "inventions": [], "warnings": []}
-
-event: done
-data: {"engineVersion": "1.0.0", "aiModel": "claude-sonnet-4-20250514"}
-```
-
-**Eventos**:
-- `start`: conexión establecida, requestId asignado.
-- `token`: chunk de texto del LLM.
-- `: ping` (SSE comment): keep-alive cada 20s (Render.com no cierra conexión).
-- `validation`: resultado de validación post-IA al finalizar.
-- `done`: stream completado, metadata.
-- `error` (si aplica): `{"code": "RATE_LIMIT", "message": "..."}`.
+> El spec original proponía un endpoint SSE para streaming de la adaptación con eventos `start` / `token` / `:ping` / `validation` / `done`. **NO** está implementado en v0. La implementación shipped es sincrónica. Cuando se habilite un LLM real en v1, se reintroducirá con el patrón `Results.ServerSentEvents` de .NET 10.
 
 ## Domain Contracts (C# interfaces)
 
-### IAiClient
+### IAiClient (puerto, shipped en commit `68baaf2`)
 
 ```csharp
 namespace BuildCv.Application.Features.Adapt;
 
+/// <summary>
+/// Puerto de IO para el proveedor de IA. La capa Domain y Application NO saben
+/// qué proveedor existe (Anthropic, OpenAI, etc.). La implementación vive en
+/// Infrastructure (Constitution Art. VI — Clean Arch).
+/// </summary>
 public interface IAiClient
 {
+    /// <summary>Llamada sincrónica. Devuelve el texto adaptado completo.</summary>
     Task<string> CompleteAsync(string prompt, CancellationToken ct);
-
-    IAsyncEnumerable<string> StreamAsync(string prompt, CancellationToken ct);
 }
 ```
 
-### CrossEntityValidator
+> **NO** hay `IAsyncEnumerable<string> StreamAsync(...)` — el stub solo implementa `CompleteAsync` y el endpoint es sincrónico.
+
+### SeverityPolicy (domain, shipped)
 
 ```csharp
 namespace BuildCv.Domain.Adapt;
 
-public interface ICrossEntityValidator
+public sealed class SeverityPolicy
 {
-    ValidationReport Validate(
-        IReadOnlySet<string> originalEntities,
-        IReadOnlySet<string> adaptedEntities,
+    public Severity Classify(IReadOnlyList<EntityInvention> inventions);
+}
+```
+
+### CrossEntityValidator (domain, shipped)
+
+```csharp
+namespace BuildCv.Domain.Adapt;
+
+public sealed class CrossEntityValidator
+{
+    public ValidationReport Validate(
+        IReadOnlyList<string> originalEntities,
+        IReadOnlyList<string> adaptedEntities,
         IReadOnlyDictionary<string, InventionType> entityTypes);
-}
-```
-
-### SeverityPolicy
-
-```csharp
-namespace BuildCv.Domain.Adapt;
-
-public interface ISeverityPolicy
-{
-    Severity Classify(IReadOnlyList<EntityInvention> inventions);
 }
 ```
 
 ## Configuration Contract
 
+> **Diferencias con el plan original:** en v0 NO se requiere `Ai:ApiKey` ni `Ai:Model` en configuración. El stub no hace IO ni llama a ningún proveedor. El bloque siguiente documenta la configuración que se requerirá en v1 cuando se habilite un LLM real (preservado del plan original como referencia).
+
 ```json
 {
   "Ai": {
-    "ApiKey": "env:Ai__ApiKey (REQUIRED, from IConfiguration)",
-    "Model": "claude-sonnet-4-20250514 (default)",
+    "ApiKey": "env:Ai__ApiKey (REQUIRED for v1, from IConfiguration)",
+    "Model": "claude-sonnet-4-20250514 (default for v1)",
     "MaxTokens": 4096,
     "ZeroDataRetention": false
   },
@@ -186,15 +157,15 @@ public interface ISeverityPolicy
 }
 ```
 
-## Logging Contract (Serilog structured)
+## Logging Contract (Console.WriteLine, structured)
 
 ```csharp
 // ✓ Allowed
-Log.Information("Adapt completed (cvLength={CvLen}, jobLength={JobLen}, model={Model}, severity={Severity}, retryCount={Retry}, traceId={TraceId})",
-    cv.Length, job.Length, model, severity, retry, traceId);
+Console.WriteLine("Adapt completed (cvLength={CvLen}, jobLength={JobLen}, severity={Severity}, inventions={InventionsCount}, traceId={TraceId})",
+    cv.Length, job.Length, severity, inventionsCount, traceId);
 
-// ✗ Prohibited
-Log.Information("CV: {Cv}", cv);  // NUNCA contenido
-Log.Information("Adapted: {Adapted}", adapted);  // NUNCA contenido
-Log.Information("Job: {Job}", job);  // NUNCA contenido
+// ✗ Prohibited (Constitution Art. III)
+Console.WriteLine("CV: {Cv}", cv);  // NUNCA contenido
+Console.WriteLine("Adapted: {Adapted}", adapted);  // NUNCA contenido
+Console.WriteLine("Job: {Job}", job);  // NUNCA contenido
 ```

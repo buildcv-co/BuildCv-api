@@ -47,7 +47,7 @@ cd ~/Dev/portfolio/buildCV
 curl http://localhost:5080/health/ready
 
 # 3. Export PDF (happy path, sin invenciones)
-curl -X POST http://localhost:5080api/v1/export \
+curl -X POST http://localhost:5080/api/v1/export \
   -H "Content-Type: application/json" \
   -d '{
     "adaptedCv": "# Juan Pérez\n\n## Resumen\nBackend developer con 2 años de experiencia en C# y .NET.\n\n## Experiencia\n- Acme Corp · Developer · 2024-2026",

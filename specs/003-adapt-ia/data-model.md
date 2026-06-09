@@ -1,31 +1,11 @@
 # Data Model: 003-adapt-ia
 
+> **Source of truth:** `src/BuildCv.Domain/Adapt/AdaptationTypes.cs` (commit `68baaf2`). Todos los tipos viven en un único archivo `AdaptationTypes.cs` (no en archivos separados como sugería el plan original).
+
 ## Domain Types (inmutables, records)
 
 ```csharp
 namespace BuildCv.Domain.Adapt;
-
-/// Resultado de la adaptación con validación.
-public sealed record AdaptationResult(
-    string AdaptedCv,
-    ValidationReport Validation,
-    string EngineVersion,
-    string AiModel);
-
-/// Reporte de validación post-IA. SIEMPRE presente, incluso si IsValid=true.
-public sealed record ValidationReport(
-    bool IsValid,
-    Severity Severity,
-    IReadOnlyList<EntityInvention> Inventions,
-    IReadOnlyList<string> Warnings);
-
-/// Una entidad que aparece en el CV adaptado pero NO en el original.
-public sealed record EntityInvention(
-    InventionType Type,
-    string Claimed,
-    string? Original,
-    InventionSeverity Severity,
-    int Position);
 
 public enum InventionType
 {
@@ -50,6 +30,25 @@ public enum Severity
     Warning,     // 1-2 soft
     Critical     // 1+ hard o ≥3 soft
 }
+
+public sealed record EntityInvention(
+    InventionType Type,
+    string Claimed,
+    string? Original,
+    InventionSeverity InventionSeverity,
+    int Position);
+
+public sealed record ValidationReport(
+    bool IsValid,
+    Severity Severity,
+    IReadOnlyList<EntityInvention> Inventions,
+    IReadOnlyList<string> Warnings);
+
+public sealed record AdaptationResult(
+    string AdaptedCv,
+    ValidationReport Validation,
+    string EngineVersion,
+    string AiModel);
 ```
 
 ## Application Layer Types
@@ -59,42 +58,54 @@ namespace BuildCv.Application.Features.Adapt;
 
 public sealed record AdaptCvCommand(
     string CvText,
-    string JobText,
-    bool Stream = false) : IRequest<Result<AdaptationResult>>;
+    string JobText);
+```
 
-/// Puerto: abstracción del cliente IA. Domain y Application NO saben que existe Anthropic.
+```csharp
+namespace BuildCv.Application.Features.Adapt;
+
+/// <summary>
+/// Puerto de IO para el proveedor de IA. La capa Domain y Application NO saben
+/// qué proveedor existe (Anthropic, OpenAI, etc.). La implementación vive en
+/// Infrastructure (Constitution Art. VI — Clean Arch).
+/// </summary>
 public interface IAiClient
 {
-    /// Llamada sin streaming.
+    /// <summary>Llamada sincrónica. Devuelve el texto adaptado completo.</summary>
     Task<string> CompleteAsync(string prompt, CancellationToken ct);
-
-    /// Llamada con streaming. Yield retorna chunks de texto.
-    IAsyncEnumerable<string> StreamAsync(string prompt, CancellationToken ct);
 }
 ```
+
+> **Diferencias con el plan original:**
+> - `AdaptCvCommand` NO tiene `bool Stream` — el endpoint es sincrónico en v0.
+> - `IAiClient` NO expone `IAsyncEnumerable<string> StreamAsync(...)` — el stub solo implementa `CompleteAsync`.
 
 ## Infrastructure Types
 
 ```csharp
 namespace BuildCv.Infrastructure.Ai;
 
-public sealed class AnthropicOptions
+/// <summary>
+/// Implementación v0 del IAiClient. NO usa un LLM real — retorna una versión
+/// "marco" del CV original con la keyword de la vacante highlighted, sin
+/// agregar contenido. Esto permite probar el flujo end-to-end en v0
+/// (v0 no llama al proveedor real — M1 lo habilitará con clave Anthropic).
+///
+/// Constitution compliance: Art. I (no invención — solo reorganiza), Art. III
+/// (sin persistencia, sin IO), Art. IX (sin ZDR claim — v0 no usa LLM).
+/// </summary>
+public sealed class StubAiClient : IAiClient
 {
-    public string ApiKey { get; set; } = "";  // required, from configuration
-    public string Model { get; set; } = "claude-sonnet-4-20250514";
-    public int MaxTokens { get; set; } = 4096;
-    public bool ZeroDataRetention { get; set; } = false;  // requires Enterprise
-}
-
-/// Implementación de IAiClient. Único lugar donde aparece el SDK de Anthropic.
-public sealed class AnthropicAiClient(
-    AnthropicClient client,
-    IOptions<AnthropicOptions> options,
-    ILogger<AnthropicAiClient> logger) : IAiClient
-{
-    // ...
+    public Task<string> CompleteAsync(string prompt, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        // Retorna CV "marco" determinista, sin agregar contenido.
+        return Task.FromResult(STUB_CV);
+    }
 }
 ```
+
+> **Diferencias con el plan original:** NO existen `AnthropicAiClient.cs` ni `AnthropicOptions.cs`. La implementación shipped es **única y exclusivamente** `StubAiClient`. Cuando se habilite un proveedor real (v1), se agregará detrás del mismo puerto `IAiClient` sin tocar Application/Domain.
 
 ## Api Layer (DTOs HTTP)
 
@@ -105,11 +116,12 @@ public sealed record AdaptRequestDto(
     [Required, MaxLength(50_000)] string CvText,
     [Required, MaxLength(20_000)] string JobText);
 
-public sealed record AdaptResponseDto(
-    string AdaptedCv,
-    ValidationReportDto Validation,
-    string EngineVersion,
-    string AiModel);
+public sealed record EntityInventionDto(
+    string Type,
+    string Claimed,
+    string? Original,
+    string Severity,
+    int Position);
 
 public sealed record ValidationReportDto(
     bool IsValid,
@@ -117,47 +129,48 @@ public sealed record ValidationReportDto(
     IReadOnlyList<EntityInventionDto> Inventions,
     IReadOnlyList<string> Warnings);
 
-public sealed record EntityInventionDto(
-    string Type,
-    string Claimed,
-    string? Original,
-    string Severity,
-    int Position);
+public sealed record AdaptResponseDto(
+    string AdaptedCv,
+    ValidationReportDto Validation,
+    string EngineVersion,
+    string AiModel);
 ```
 
-## Validation Pipeline
+> **Diferencias con el plan original:** `AdaptRequestDto` NO tiene `bool Stream`. `AdaptResponseDto` no tiene `DeltaDeMejoraDto` ni `ChangesDto` — el delta de mejora (que el spec original prometía en US2) no se implementó en v0 porque requiere tracking por chunk, y el stub retorna el CV completo en una sola llamada.
+
+## Validation Pipeline (AdaptCvHandler)
 
 ```
-AdaptCvHandler.HandleAsync(cmd, ct)
-├── 1. validator.ValidateAndThrowAsync(cmd, ct)
-├── 2. Extract entities from CV original → OriginalEntities
-├── 3. Call IAiClient.CompleteAsync(prompt) → AdaptedCv
-├── 4. Extract entities from AdaptedCv → AdaptedEntities
-├── 5. CrossEntityValidator.Validate(OriginalEntities, AdaptedEntities) → ValidationReport
-│   ├── If Severity == Critical AND retry available → loop back to step 3 with stricter prompt (max 1 retry)
-│   └── Return Result.Ok(AdaptationResult)
-└── 6. Log structured (no PII): "Adapt completed (cvLen, jobLen, model, severity, retryCount, traceId)"
+AdaptCvHandler.Handle(command, ct)
+├── 1. Extract entities from CV original → OriginalEntities     [EntityExtractor]
+├── 2. Build prompt (PromptBuilder.Build)                        [nonces + bloques delimitados]
+├── 3. Call IAiClient.CompleteAsync(prompt, ct) → AdaptedCv      [StubAiClient en v0]
+├── 4. Extract entities from AdaptedCv → AdaptedEntities         [EntityExtractor]
+├── 5. CrossEntityValidator.Validate(original, adapted, types) → report
+├── 6. SeverityPolicy.Classify(report.Inventions) → finalSeverity
+├── 7. Build ValidationReport (IsValid = (severity != Critical))
+├── 8. Return Result.Success(AdaptationResult)
+└── 9. Log structured: "Adapt completed (cvLength, jobLength, severity, inventions, traceId)"
 ```
+
+> **Diferencias con el plan original:** el handler es **lineal**. NO hay loop de reintento por severidad. NO hay "auto-regen con prompt más estricto". El `AdaptCvHandler` (`src/BuildCv.Application/Features/Adapt/AdaptCvHandler.cs:37-79`) es un flujo straight-through.
 
 ## State Machine: Adaptation Flow
 
 ```
 [Start]
    ↓
-[Validate input] ──invalid──→ [400 ProblemDetails]
-   ↓ valid
 [Extract original entities]
    ↓
-[Call LLM] ──error──→ [503 ProblemDetails + fallback to deterministic]
+[Call IAiClient] ──error──→ [503 ProblemDetails + Result.Failure("AI_UNAVAILABLE")]
    ↓ success
 [Extract adapted entities]
    ↓
-[Cross-validate] ──Critical + retry left──→ [Loop: stricter prompt]
+[Cross-validate] ──Critical──→ [AdaptationResult con Severity=Critical, IsValid=false]
    ↓                              ↓
-   ↓                          retry==0
-[Return AdaptationResult]    [Return with WARNING]
+[Return AdaptationResult]    [AdaptationResult con Warning/None]
 ```
 
 ## Persistence
 
-**NONE** (v0 mandate, Art. III). Todos los tipos viven solo en memoria durante la request.
+**NONE** (v0 mandate, Art. III). Todos los tipos viven solo en memoria durante la request. El log estructurado (Console.WriteLine) solo emite metadatos: `cvLength`, `jobLength`, `severity`, `inventionsCount`, `traceId` (NFR-002).

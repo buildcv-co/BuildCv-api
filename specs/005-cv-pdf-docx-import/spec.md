@@ -2,7 +2,7 @@
 
 **Feature Branch**: `005-cv-pdf-docx-import`
 **Created**: 2026-06-09
-**Status**: Draft
+**Status**: ✅ SHIPPED (commit c61bdf4, 2026-06-09)
 **Hito**: v0.5 (P0.5)
 **Input**: User description: "Carga de archivos PDF/DOCX del CV (parseo server-side) para alimentar el editor 006 con texto extraído en vez de pegarlo a mano."
 

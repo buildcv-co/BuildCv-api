@@ -2,7 +2,7 @@
 
 **Feature Branch**: `003-adapt-ia`
 **Created**: 2026-06-08
-**Status**: Draft
+**Status**: ✅ SHIPPED (commit 68baaf2, 2026-06-09)
 **Input**: User description: "Adaptar el CV a la vacante usando LLM con cero invención (Constitution Art. I)"
 
 > **Frontend counterpart:** [../../../BuildCv-web/specs/003-web-adapt-ui/](../../../BuildCv-web/specs/003-web-adapt-ui/)

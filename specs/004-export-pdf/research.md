@@ -27,10 +27,17 @@ Document.Create(container =>
 
 ## 2. Licencia community
 
-En `Program.cs` (o en el constructor de `QuestPdfGenerator`):
+**Ubicación shipped:** en el **constructor estático de `QuestPdfGenerator`** (`src/BuildCv.Infrastructure/Pdf/QuestPdfGenerator.cs:16-19`). El plan original proponía setear la licencia en `Program.cs`, pero la implementación shipped la movió al constructor estático de la clase para garantizar que esté configurada antes de la primera generación, sin depender del orden de wire-up en `Program.cs`.
 
 ```csharp
-QuestPDF.Settings.License = LicenseType.Community;
+public sealed class QuestPdfGenerator : IPdfGenerator
+{
+    static QuestPdfGenerator()
+    {
+        QuestPDF.Settings.License = LicenseType.Community;
+    }
+    // ...
+}
 ```
 
 Si no se setea, QuestPDF lanza excepción al generar (en runtime).

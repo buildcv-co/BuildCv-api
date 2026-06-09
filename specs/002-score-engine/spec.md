@@ -19,17 +19,17 @@ Implementación del **motor de puntaje determinista y explicable** que calcula c
 | Tipo | Líneas | Responsabilidad |
 |---|---|---|
 | `ScoringEngine.cs` | 322 | Orquestación: tokeniza, matchea, pondera, renormaliza |
-| `SkillMatcher.cs` | 107 | Cascada C1-C5: match exacto, sinonimia, fuzzy, relacionado, crédito parcial |
+| `SkillMatcher.cs` | 107 | Cascada T0–T4: exacto → implicación ascendente → relacionado/lugar → lema/stem → fuzzy blindado |
 | `SkillScanner.cs` | 45 | Extracción de skills del CV y la vacante |
-| `MatchResult.cs` | 30 | Tipo inmutable con `Present` + `Missing` |
-| `KeywordAnalysis.cs` | 21 | Análisis de keywords cruzadas |
-| `ScoreResult.cs` | 52 | Sella `EngineVersion` + `Components` + bandas cualitativas |
+| `MatchResult.cs` | 30 | Tipo inmutable: `Tier` (MatchTier) + `Placement` + `Credit` |
+| `KeywordAnalysis.cs` | 21 | Análisis de keywords cruzadas (present, missing, partial) |
+| `ScoreResult.cs` | 52 | Sella `EngineVersion` + `LexiconVersion` + `ContextHash` + `Band` (enum Bajo/Medio/Bueno/Fuerte) + `Components` + `GatesApplied` + `FormatIssues` + `Disclaimer` |
 | `Recommendation.cs` | 23 | Sugerencias priorizadas para el usuario |
 | `CvProfile.cs` | 11 | Value object del CV parseado |
 | `IScoringEngine.cs` | 13 | Puerto (interfaz) |
 | `ISkillMatcher.cs` | 9 | Puerto (interfaz) |
 
-**Total dominio:** 681 líneas.
+**Total dominio:** 633 líneas.
 
 ## Capa Application (`src/BuildCv.Application/Features/Scoring/`)
 
@@ -40,7 +40,7 @@ Implementación del **motor de puntaje determinista y explicable** que calcula c
 ## Capa Api
 
 - `Endpoints/ScoringEndpoints.cs` — Minimal API `MapPost /api/v1/score`
-- `Security/RateLimiting.cs` — rate-limit por IP (20/min)
+- `Security/RateLimiting.cs` — rate-limit por IP (60/min)
 - `Contracts/ScoreResponse.cs` — DTO con `EngineVersion` sellado
 - `Contracts/ScoreResponseMapper.cs` — Domain → HTTP
 - `Health/AiConfigHealthCheck.cs` — health check del provider IA
@@ -66,4 +66,4 @@ dotnet list src/BuildCv.Domain reference   # 0 project refs
 
 - **003-adapt-ia** (M1) — adaptación con IA, bloques con nonce, validación post-IA
 - **004-export-pdf** (M2) — exportación del CV adaptado
-- **005-ui-analizador** (M0.1) — UI web del score (paralela a 003)
+- **005-cv-pdf-docx-import** (M0.5 / v0.5) — carga de PDF/DOCX server-side (shipped, ver `specs/005-cv-pdf-docx-import/`)

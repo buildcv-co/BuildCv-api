@@ -6,15 +6,22 @@
 
 ## Summary
 
-Motor de puntaje determinista y explicable que calcula coincidencia entre un CV y una vacante (0-100) sin usar LLM. Implementa la cascada C1-C5 (match exacto → sinonimia → fuzzy → relacionado → crédito parcial) con renormalización de componentes no observables (Art. II).
+Motor de puntaje determinista y explicable que calcula coincidencia entre un CV y una vacante (0-100) sin usar LLM. Implementa dos nociones distintas, ambas con prefijo "C":
+
+- **Cascada de matching** (`SkillMatcher.cs:32-93`): 5 niveles aplicados a CADA requisito de la vacante contra el CV. T0 Exacto → T1 Implicación ascendente → T2 Lema/stem → T3 Relacionado/implicación descendente → T4 Fuzzy blindado. Produce `MatchResult(Tier, Placement, Credit)`.
+- **Componentes de score** (`ScoringEngine.cs:8-24`): 5 dimensiones ponderadas que se agregan al número final. Match 45% · Structure 20% · Achievements 20% · Format 10% · Length 5%.
+
+Estos dos "C" no se confunden: la cascada es la regla de matching por requisito; los componentes son las dimensiones del score final.
+
+Renormalización: cada componente tiene `Measurability` (0..1) que pondera su contribución; el global se renormaliza sobre el peso efectivamente medible (Art. II).
 
 **Decisiones técnicas:**
 
 - **C# puro (.NET 10)**, dominio PURO (0 packages, 0 project refs)
-- **Cascada C1-C5**: orden de aplicación de reglas, cada una con peso propio
-- **Renormalización**: componentes no observables se excluyen sin penalizar
-- **EngineVersion sellada**: en cada `ScoreResult`, garantiza comparabilidad temporal
-- **Gazetteer YAML embebido**: `Lexicon/skills.gazetteer.v1.yaml`, cargado como `ISingleton` inmutable
+- **Función pura**: `Score(JobRequirementSet, CvAnalysis)` no hace IO, no lee reloj, no consulta red.
+- **EngineVersion sellada** (constante `ScoringEngine.Version = "1.0.0"`): en cada `ScoreResult`, garantiza comparabilidad temporal.
+- **LexiconVersion** + **ContextHash**: también se sella en cada `ScoreResult` para reproducibilidad.
+- **Gazetteer YAML embebido**: `BuildCv.Infrastructure/Lexicon/skills.gazetteer.v1.yaml`, cargado como `Singleton` inmutable vía `EmbeddedResource`.
 
 ## Technical Context
 
@@ -61,15 +68,16 @@ specs/002-score-engine/
 ```
 src/BuildCv.Domain/Scoring/
 ├── ScoringEngine.cs       # Orquestación (322 líneas)
-├── SkillMatcher.cs        # Cascada C1-C5 (107 líneas)
+├── SkillMatcher.cs        # Cascada de matching T0–T4 (107 líneas)
 ├── SkillScanner.cs        # Extracción de skills (45 líneas)
-├── MatchResult.cs         # Tipo inmutable (30 líneas)
-├── KeywordAnalysis.cs     # Análisis de keywords (21 líneas)
-├── ScoreResult.cs         # Sella EngineVersion (52 líneas)
+├── MatchResult.cs         # Tipo inmutable: Tier + Placement + Credit (30 líneas)
+├── KeywordAnalysis.cs     # Análisis de keywords cruzadas (21 líneas)
+├── ScoreResult.cs         # ComponentId, ScoreBand, ComponentScore, FormatIssue, GateApplied, ScoreResult (52 líneas)
 ├── Recommendation.cs      # Sugerencias priorizadas (23 líneas)
 ├── CvProfile.cs           # Value object CV (11 líneas)
 ├── IScoringEngine.cs      # Puerto (13 líneas)
 └── ISkillMatcher.cs       # Puerto (9 líneas)
+# Total: 633 líneas
 
 src/BuildCv.Application/Features/Scoring/
 ├── ScoreCvCommand.cs
@@ -79,23 +87,27 @@ src/BuildCv.Application/Features/Scoring/
 
 ## Phase 0 — Research
 
-- **Cascada C1-C5**: orden de aplicación de matching rules. Match exacto (C1) > sinonimia (C2) > fuzzy (C3) > relacionado (C4) > crédito parcial (C5).
-- **Renormalización**: si un componente no es observable (ej. formato sin skills extraíbles), se excluye sin penalizar.
-- **Gazetteer YAML**: cargar skills.gazetteer.v1.yaml como recurso embebido (immutable, versionado).
+- **Cascada de matching** (`SkillMatcher`): T0 Exacto → T1 Implicación ascendente (p. ej. ASP.NET Core ⇒ .NET) → T2 Lema/stem (keywords genéricas) → T3 Relacionado o implicación descendente → T4 Fuzzy blindado (Jaro-Winkler ≥ 0.92).
+- **Componentes del score** (`ScoringEngine`): Match 45% / Structure 20% / Achievements 20% / Format 10% / Length 5%. El global renormaliza sobre el peso efectivamente medible (Measurability).
+- **Gazetteer YAML**: cargar `skills.gazetteer.v1.yaml` como recurso embebido (`EmbeddedResource`) en `BuildCv.Infrastructure`, registrado como Singleton inmutable.
 - **Blocklist de confundibles**: `java` ⇎ `javascript`, `c` ⇎ `c#`, `node` ⇎ `node.js` — el fuzzy matching NO debe cruzar estos.
 
 ## Phase 1 — Design
 
 ### Data Model
 
-- **`ScoreResult`** (record): `int Score`, `string Band`, `IReadOnlyList<ComponentBreakdown> Components`, `IReadOnlyList<string> Present`, `IReadOnlyList<string> Missing`, `string EngineVersion`.
-- **`ComponentBreakdown`** (record): `string Code`, `double Weight`, `double Value`, `string Rationale`.
+- **`ScoreResult`** (record, sellado): `int Overall`, `ScoreBand Band`, `string Disclaimer`, `IReadOnlyList<ComponentScore> Components`, `KeywordAnalysis Keywords`, `IReadOnlyList<Recommendation> Recommendations`, `IReadOnlyList<FormatIssue> FormatIssues`, `IReadOnlyList<GateApplied> GatesApplied`, `string EngineVersion`, `string LexiconVersion`, `string ContextHash`.
+- **`ComponentScore`** (record): `ComponentId Id`, `double SubScore`, `double Weight`, `double Measurability`, `double Confidence`, `string Summary`.
+- **`ScoreBand`** (enum): `Bajo` (<40), `Medio` (<65), `Bueno` (<85), `Fuerte` (≥85). El número es el valor rector, la banda es cualitativa.
+- **`ComponentId`** (enum): `Match`, `Structure`, `Achievements`, `Format`, `Length`.
+- **`GateApplied`** (record): `ComponentId Component`, `double Cap`, `string Reason`, `string Message` (cap aplicado, p. ej. "no-contact" baja Structure a 0.5).
+- **`FormatIssue`** (record): `string Code`, `string Severity` ("warn" | "info"), `string Message`.
 
 ### Contracts
 
 - **POST /api/v1/score** (HTTP, ver [contracts/](../../api/contracts.md))
-  - Request: `{ cvText, jobText }`
-  - Response 200: `{ score, band, components, present, missing, engineVersion }`
+  - Request: `{ cvText, jobText }` (max 20_000 chars cada uno, FluentValidation)
+  - Response 200: shape completo de `ScoreResponseDto` con `score`, `band`, `components[]`, `present[]`, `missing[]`, `partial[]`, `recommendations[]`, `formatIssues[]`, `gatesApplied[]`, `disclaimer`, `engineVersion`.
 
 ## Phase 2 — Tasks
 

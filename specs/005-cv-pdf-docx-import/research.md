@@ -8,11 +8,15 @@
 
 ## D01 — ¿Por qué PdfPig (UglyToad.PdfPig) y no otra librería PDF?
 
+### Versión shipped
+
+`UglyToad.PdfPig 1.7.0-custom-5` (NuGet, Apache-2.0). Es un **fork custom** de la rama principal para soportar .NET 10 — la `v0.1.x` upstream que aparece en algunas docs está desactualizada para nuestro target. El paquete custom está publicado como `1.7.0-custom-5` para evitar colisión con versiones upstream.
+
 ### Candidatos evaluados
 
 | Librería | Licencia | Tamaño | .NET puro | Costo | Veredicto |
 |---|---|---|---|---|---|
-| **UglyToad.PdfPig** | Apache-2.0 | ~3 MB dll | ✅ Sí | Gratis | ✅ **Elegida** |
+| **UglyToad.PdfPig 1.7.0-custom-5** | Apache-2.0 | ~3 MB dll | ✅ Sí | Gratis | ✅ **Elegida** |
 | iText 7 / iTextSharp | AGPL / Comercial | ~10 MB dll | ✅ Sí | Gratis solo AGPL; comercial miles USD/año | ❌ AGPL incompatible con el proyecto (el dueño debe poder usar el código en su portafolio sin restricciones virales). |
 | PdfSharp / PdfSharpCore | MIT | ~2 MB dll | ✅ Sí | Gratis | ❌ Diseñada para **crear** PDFs, no para **parsear** con extracción de texto rica. La extracción de texto está en proyecto separado (PdfSharpCore.Pdf.ContentStream) y es menos madura. |
 | Spire.PDF | Comercial (con free tier limitado) | ~30 MB dll | ✅ Sí | Gratis para <10 páginas; comercial después | ❌ El free tier no sirve para CVs de 2+ páginas; la versión comercial cuesta cientos USD/año. |

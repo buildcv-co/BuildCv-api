@@ -105,7 +105,7 @@ Esta Constitución fija las **reglas duras innegociables** del proyecto. Son pri
 
 **Reglas.**
 - El backend **MUST** estar construido en ASP.NET Core (C#, .NET) con una arquitectura limpia y defendible (separación de capas, inversión de dependencias, SOLID), de modo que el núcleo de dominio no dependa de ASP.NET ni del SDK de IA.
-- El motor de puntaje **MUST** residir en el dominio como servicio puro, aislado de infraestructura, y los proveedores externos (IA, parseo de archivos, export PDF, pagos, persistencia local) **MUST** estar tras puertos/abstracciones (`IAiClient`, `ICvParser` para PDF/DOCX, `IPdfExporter`, `IPaymentProvider`, `ICvStore` para localStorage en el frontend, …) para ser sustituibles sin tocar el núcleo *(materializa FR-030 y la portabilidad de hitos, v1.1.0)*.
+- El motor de puntaje **MUST** residir en el dominio como servicio puro, aislado de infraestructura, y los proveedores externos (IA, parseo de archivos, export PDF, pagos, persistencia local) **MUST** estar tras puertos/abstracciones (`IAiClient`, `ICvParser` para PDF/DOCX, `IPdfGenerator`, `IPaymentProvider`, `ICvStore` para localStorage en el frontend, …) para ser sustituibles sin tocar el núcleo *(materializa FR-030 y la portabilidad de hitos, v1.1.0)*.
 - El código **MUST NOT** acoplar tipos de un SDK externo fuera de la capa de infraestructura.
 - El backend **MUST** aplicar el principio de "no sobre-ingeniería": un patrón se introduce solo cuando paga su costo; demostrar **cuándo NO** aplicarlo es parte de la señal de seniority.
 - El sistema **MUST** degradar con elegancia ante fallo del proveedor de IA: el análisis determinista (puntaje, keywords, recomendaciones) sigue disponible y la interfaz no se rompe *(FR-030, NFR-018, NFR-019, US-016)*.
@@ -114,7 +114,7 @@ Esta Constitución fija las **reglas duras innegociables** del proyecto. Son pri
 **Puertos definidos (a la fecha de v1.1.0):**
 - `IAiClient` — Application, para invocación del proveedor de IA.
 - `ICvParser` — Application, para parseo de archivos (PDF, DOCX) *(añadido en v1.1.0)*.
-- `IPdfExporter` — Application, para generación de PDFs.
+- `IPdfGenerator` — Application, para generación de PDFs.
 - `IPaymentProvider` — Application, para Wompi (v1+).
 - `ICvStore` — Frontend, para persistencia local (localStorage, IndexedDB) del borrador *(añadido en v1.1.0)*.
 
@@ -137,7 +137,7 @@ Esta Constitución fija las **reglas duras innegociables** del proyecto. Son pri
 - La separación de hitos **MUST** mantenerse en todos los artefactos: cada requisito y tarea declara su hito (P0 = v0, P0.5 = v0.5, P1 = v1).
 
 **Políticas de rate-limit (referencia operacional, detalle en `RateLimiting.cs`):**
-- `"score"` (deterministic): 60/h por IP.
+- `"score"` (deterministic): 60/min por IP.
 - `"ai"` (adaptación con LLM): 5/h por IP.
 - `"export"` (PDF generation, CPU-bound): 20/h por IP.
 - `"import"` (PDF/DOCX parsing, CPU-bound): 30/h por IP *(NUEVO en v1.1.0)*.

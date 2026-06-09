@@ -18,8 +18,8 @@ Implementar el flujo de **carga de archivos PDF/DOCX** del CV con parseo **serve
 
 **Language/Version**: C# 13 / .NET 10
 **Primary Dependencies** (NUEVOS, añadir a `BuildCv.Infrastructure.csproj`):
-- `UglyToad.PdfPig` v0.1.x (NuGet, Apache-2.0)
-- `DocumentFormat.OpenXml` v3.x (NuGet, MIT)
+- `UglyToad.PdfPig` **1.7.0-custom-5** (NuGet, Apache-2.0) — la versión shipped es un fork custom para soportar .NET 10; la versión `v0.1.x` que mencionaba el plan original NO es la que se usa.
+- `DocumentFormat.OpenXml` **3.5.1** (NuGet, MIT)
 - `FluentValidation` (ya instalado en M1)
 - `Microsoft.AspNetCore.RateLimiting` (built-in, política `"import"`)
 - `xUnit` + `FluentAssertions` (testing, ya instalados)
@@ -83,73 +83,69 @@ specs/005-cv-pdf-docx-import/
 └── tasks.md             # Phase 2: Implementation tasks (TDD-ordered)
 ```
 
-### Source Code
+### Source Code (shipped, commit `c61bdf4`)
 
 ```
-src/BuildCv.Domain/                                  # PURO — no nuevos packages
-├── Import/                                          # NUEVO namespace
-│   ├── ImportRequest.cs                             # Record: { FileBytes, MimeDeclared, FileName, TraceId }
-│   ├── ImportResult.cs                              # Record: { Text, Sections, Warnings, EngineVersion, TraceId }
-│   ├── DetectedSection.cs                           # Record: { Heading, Start, End, Confidence }
-│   ├── ImportWarning.cs                             # Record: { Code, Message, Severity }
-│   ├── SectionHeuristics.cs                         # Static regex: detecta headers en MAYÚSCULAS
-│   └── SectionRegexPatterns.cs                      # Constantes de patrones (ES + EN)
+src/BuildCv.Application/Features/Import/             # + Application services
+├── ICvParser.cs                                     # Puerto: ImportResult Parse(ImportCvCommand)
+├── ImportTypes.cs                                   # Combined: ImportCvCommand, ImportSection, ImportWarning, ImportResult (un único archivo)
+├── ImportErrorCodes.cs                              # Catálogo cerrado de códigos IMPORT_*
+├── ParserEngineException.cs                         # Excepción tipada con Code
+├── SectionDetector.cs                               # Lógica de detección de secciones
+├── ImportCvValidator.cs                             # FluentValidation: tamaño, mime
+└── ImportCvHandler.cs                               # Orquesta: validator → ICvParser → return
 
-src/BuildCv.Application/                             # + Application services
-├── Features/Import/
-│   ├── ICvParser.cs                                 # Puerto: Parse(ImportRequest) → ImportResult
-│   ├── ImportCvCommand.cs                           # Command para el handler
-│   ├── ImportCvHandler.cs                           # Orquesta: validator → parser → return
-│   ├── ImportCvValidator.cs                         # FluentValidation: tamaño, mime, magic bytes
-
-src/BuildCv.Infrastructure/                          # + PdfPig + OpenXml NuGets
-├── Parsing/
-│   ├── PdfPigCvParser.cs                            # Implementación ICvParser para PDF
-│   ├── OpenXmlCvParser.cs                           # Implementación ICvParser para DOCX
-│   ├── CvParserDispatcher.cs                        # Selecciona el parser según MIME detectado
-│   ├── PdfMagicBytes.cs                             # Helper: valida "%PDF-" en los primeros bytes
-│   └── OpenXmlMagicBytes.cs                         # Helper: valida "PK\x03\x04" + entry word/document.xml
+src/BuildCv.Infrastructure/Parsing/                  # + PdfPig 1.7.0-custom-5 + OpenXml 3.5.1
+├── PdfPigCvParser.cs                                # Implementación ICvParser para PDF (en memoria)
+├── OpenXmlCvParser.cs                               # Implementación ICvParser para DOCX (en memoria)
+└── ParserRouter.cs                                  # Compuesto que despacha al parser concreto según MIME + magic bytes
+                                                      # (magic bytes checkeado inline; no hay archivos PdfMagicBytes.cs ni OpenXmlMagicBytes.cs separados)
 
 src/BuildCv.Api/                                     # + endpoint /api/v1/import
-├── Endpoints/
-│   └── ImportEndpoints.cs                           # POST → retorna ImportResult JSON
-├── Security/
-│   └── RateLimiting.cs                              # EXTENDER: agregar política "import" (30/h)
-├── Contracts/
-│   └── ImportContracts.cs                           # DTOs HTTP (request/response)
-└── Program.cs                                       # Wire-up: MapImportEndpoints()
+├── Contracts/ImportContracts.cs                     # DTOs HTTP + ImportResponseMapper (28 líneas)
+├── Endpoints/ImportEndpoints.cs                     # POST → ImportResult JSON
+└── Security/RateLimiting.cs                         # Política "import" 30/h (constante ImportPolicy)
 ```
+
+> **Diferencias con el plan original:**
+> - El directorio `src/BuildCv.Domain/Import/` **NO existe** en la implementación shipped. Los tipos `ImportSection`, `ImportWarning`, `ImportResult` viven en `Application/Features/Import/ImportTypes.cs`. El Domain se mantiene PURO (cero referencias a Application/Infrastructure).
+> - `ImportRequest.cs` (record del dominio) **NO existe** — el handler trabaja directamente con `ImportCvCommand` (de Application) en vez de un record separado de Dominio. La separación de capas es: handler usa Command (Application), parser retorna Result (Application), y el Domain permanece PURO.
+> - `SectionHeuristics.cs` y `SectionRegexPatterns.cs` como archivos separados en Domain **NO existen**. La lógica equivalente vive en `Application/Features/Import/SectionDetector.cs`.
+> - `CvParserDispatcher.cs` **NO existe** — la implementación shipped usa `ParserRouter.cs` (que es la única `ICvParser` registrada en DI y dispatcha a los adaptadores concretos).
+> - `PdfMagicBytes.cs` y `OpenXmlMagicBytes.cs` como archivos separados **NO existen** — la lógica de magic bytes está inline en `ParserRouter.EnsureMagicBytes` (helper estático privado).
+> - No hay jerarquía de excepciones `BuildCv.Domain/Import/Exceptions/` con 8 tipos — la implementación shipped usa una sola `ParserEngineException` (en `Application/Features/Import/`) con un `Code` string, mapeada a HTTP en el endpoint.
 
 ### Tests
 
 ```
-tests/BuildCv.Domain.Tests/Import/
-├── SectionHeuristicsTests.cs                        # Regex detecta headers ES + EN
-├── SectionRegexPatternsTests.cs                     # Patrones individuales
-
 tests/BuildCv.Application.Tests/Import/
-├── ImportCvValidatorTests.cs                        # Tamaño, mime, magic bytes
-├── ImportCvHandlerTests.cs                          # Llama ICvParser, mapea resultados
-├── ICvParserContractTests.cs                        # Fake implementation cumple contrato
-└── PdfPigCvParserIntegrationTests.cs                # Golden: PDF de 2 páginas (fixture)
-    OpenXmlCvParserIntegrationTests.cs               # Golden: DOCX de 1 página (fixture)
+├── ImportCvValidatorTests.cs                        # Tamaño, mime
+├── ImportCvHandlerTests.cs                          # Llama ICvParser, mapea errores
+└── SectionDetectorTests.cs                          # Detección de secciones ES + EN
 
-tests/BuildCv.Api.IntegrationTests/Import/
-├── ImportEndpointTests.cs                           # Wire-up HTTP, multipart, mime, size
-├── ImportRateLimitTests.cs                          # Política "import" 30/h
-└── ImportMspoofingTests.cs                          # 415 si magic bytes no coinciden
+tests/BuildCv.Infrastructure.Tests/Parsing/           # NO en Domain.Tests ni Integration.Tests
+├── PdfTestFixtures.cs                               # Generador programático de PDFs in-memory
+├── DocxTestFixtures.cs                              # Generador programático de DOCX in-memory
+├── SectionDetectorIntegrationTests.cs               # Detección de secciones sobre texto extraído
+├── PdfPigCvParserTests.cs                           # PDF: extrae texto, detecta cifrado/escaneado, preserva tildes
+├── OpenXmlCvParserTests.cs                          # DOCX: extrae texto y tablas, omite imágenes
+└── ParserRouterTests.cs                             # Despacha PDF vs DOCX, rechaza MIME no soportado
 ```
+
+> **Diferencias con el plan original:**
+> - Los tests viven en **`tests/BuildCv.Infrastructure.Tests/Parsing/`**, NO en `tests/BuildCv.Domain.Tests/Import/` (el directorio Domain no existe) ni en `tests/BuildCv.Api.IntegrationTests/Import/` (los tests de integración del endpoint HTTP no se automatizaron; la verificación e2e es manual con curl).
+> - `SectionHeuristicsTests.cs` y `SectionRegexPatternsTests.cs` no existen como tales — la cobertura equivalente está en `SectionDetectorIntegrationTests.cs` y `SectionDetectorTests.cs`.
+> - `ICvParserContractTests.cs` no existe — la cobertura del contrato está distribuida en los tests de cada adaptador (`PdfPigCvParserTests` + `OpenXmlCvParserTests`).
+> - `PdfPigCvParserIntegrationTests.cs` y `OpenXmlCvParserIntegrationTests.cs` se unificaron en `PdfPigCvParserTests.cs` y `OpenXmlCvParserTests.cs` (sin prefijo "Integration" porque la suite ya está en `BuildCv.Infrastructure.Tests`).
 
 ### Golden samples (test fixtures)
 
+> **NO existen archivos `.pdf` ni `.docx` en el repositorio.** La implementación shipped usa **fixtures programáticos in-memory** que construyen el binario del PDF/DOCX al vuelo dentro del test (vía `PdfTestFixtures` y `DocxTestFixtures` que envuelven PdfPig/OpenXml para generar archivos sintéticos). Esto evita versionar binarios en git y hace los tests deterministas sin depender de assets externos.
+
 ```
-tests/BuildCv.Api.IntegrationTests/Import/Fixtures/
-├── sample-cv-2pages.pdf                             # 2 páginas: nombre, contacto, experiencia, skills
-├── sample-cv-1page.docx                             # 1 página: secciones EXPERIENCIA, EDUCACIÓN, HABILIDADES
-├── sample-cv-encrypted.pdf                          # PDF cifrado → 422 IMPORT_PDF_ENCRYPTED
-├── sample-cv-scanned.pdf                             # PDF solo con imágenes → 422 IMPORT_SCANNED_PDF
-├── sample-cv-protected.docx                         # DOCX con contraseña → 422 IMPORT_DOCX_PROTECTED
-└── sample-not-a-pdf.txt                             # .txt con bytes "%PDF-" en header → 415 (no cumple magic completo)
+tests/BuildCv.Infrastructure.Tests/Parsing/
+├── PdfTestFixtures.cs                               # Genera PDFs in-memory (texto, cifrado, escaneado, páginas>100)
+└── DocxTestFixtures.cs                              # Genera DOCX in-memory (texto, tablas, imágenes, protegido)
 ```
 
 ## Phase 0 — Research

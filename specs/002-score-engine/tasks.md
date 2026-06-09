@@ -2,6 +2,10 @@
 
 **Date**: 2026-06-06 (orig) | **Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md)
 
+## Status: SHIPPED
+
+> Esta feature se implementó en el commit `eded372` (M0 inicial) y está cerrada. Todas las tasks están completadas y los checks reflejan el código shipped.
+
 > **Nota histórica:** Estas tasks fueron ejecutadas en el commit `eded372` (M0 inicial). Este archivo es retroactivo para mantener consistencia con el formato del proyecto.
 
 ## Phase 0 — Setup
@@ -86,8 +90,9 @@
 
 ## Resultado
 
-- 92 tests verdes.
-- 681 líneas de código en Domain.
+- 31 tests verdes (en `BuildCv.Domain.Tests/Scoring/` + `BuildCv.Api.IntegrationTests/ScoringEndpointTests.cs`).
+- 633 líneas de código en `src/BuildCv.Domain/Scoring/`.
 - EngineVersion 1.0.0 sellada en cada `ScoreResult`.
+- LexiconVersion + ContextHash también sellados para reproducibilidad bit-a-bit.
 - 0 supresiones (`#pragma warning disable`, `[Skip]`).
 - Commit: `eded372` "BuildCv API (.NET 10) — motor de puntaje determinista".

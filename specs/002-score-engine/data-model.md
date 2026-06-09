@@ -1,66 +1,146 @@
 # Data Model: 002-score-engine
 
+> **Source of truth:** `src/BuildCv.Domain/Scoring/ScoreResult.cs`, `SkillMatcher.cs`, `KeywordAnalysis.cs`, `Recommendation.cs`, `CvProfile.cs`, `MatchResult.cs`, `ScoringEngine.cs` (commit `eded372`).
+
 ## Domain Types (inmutables, records)
 
 ```csharp
 namespace BuildCv.Domain.Scoring;
 
-/// Resultado del análisis determinista. Sellado con <see cref="EngineVersion"/>
-/// + <see cref="GazetteerVersion"/> para reproducibilidad (FR-006, FR-013).
-public sealed record ScoreResult(
-    int Score,
-    string Band,
-    IReadOnlyList<ComponentBreakdown> Components,
-    IReadOnlyList<string> Present,
-    IReadOnlyList<string> Missing,
-    string EngineVersion,
-    string GazetteerVersion);
+/// <summary>Componentes del puntaje (Match / Structure / Achievements / Format / Length).</summary>
+public enum ComponentId
+{
+    Match,
+    Structure,
+    Achievements,
+    Format,
+    Length,
+}
 
-public sealed record ComponentBreakdown(
-    string Code,
+/// <summary>Banda cualitativa; el número (Overall) es el valor rector (FR-010).</summary>
+public enum ScoreBand
+{
+    Bajo,    // < 40
+    Medio,   // < 65
+    Bueno,   // < 85
+    Fuerte,  // ≥ 85
+}
+
+/// <summary>Subpuntaje de un componente con peso, medibilidad y confianza.</summary>
+public sealed record ComponentScore(
+    ComponentId Id,
+    double SubScore,
     double Weight,
-    double Value,
-    string Rationale);
+    double Measurability,
+    double Confidence,
+    string Summary);
+
+/// <summary>Observación de formato (severidad: "warn" | "info").</summary>
+public sealed record FormatIssue(string Code, string Severity, string Message);
+
+/// <summary>Compuerta/cap aplicado a un componente y su razón (FR-012).</summary>
+public sealed record GateApplied(ComponentId Component, double Cap, string Reason, string Message);
+
+/// <summary>
+/// Resultado del análisis determinista. Sellado con EngineVersion + LexiconVersion
+/// + ContextHash para reproducibilidad (FR-006/013/031).
+/// </summary>
+public sealed record ScoreResult(
+    int Overall,
+    ScoreBand Band,
+    string Disclaimer,
+    IReadOnlyList<ComponentScore> Components,
+    KeywordAnalysis Keywords,
+    IReadOnlyList<Recommendation> Recommendations,
+    IReadOnlyList<FormatIssue> FormatIssues,
+    IReadOnlyList<GateApplied> GatesApplied,
+    string EngineVersion,
+    string LexiconVersion,
+    string ContextHash);
 
 public sealed record KeywordAnalysis(
-    IReadOnlyList<string> JobKeywords,
-    IReadOnlyList<string> CvKeywords,
-    IReadOnlyList<string> Matched,
-    IReadOnlyList<string> Missing);
+    IReadOnlyList<KeywordView> Present,
+    IReadOnlyList<KeywordView> Missing,
+    IReadOnlyList<KeywordView> Partial);
 
-public sealed record MatchResult(
-    IReadOnlyList<string> Present,
-    IReadOnlyList<string> Missing,
-    IReadOnlyList<string> Related);
+public sealed record KeywordView(
+    string Display,
+    string Category,
+    string Section,
+    double RequirementWeight,
+    MatchTier Tier,
+    Placement Placement,
+    double Credit,
+    string? Note);
 
 public sealed record Recommendation(
-    string Priority,
     string Action,
+    RecommendationType Type,
+    ComponentId Component,
+    int EstimatedGain,
+    bool Invents,
     string Rationale);
+
+public enum RecommendationType
+{
+    Learn,
+    Surface,
+    AddMetric,
+    FixFormat,
+    Restructure,
+}
 
 public sealed record CvProfile(
     IReadOnlyList<string> Skills,
     IReadOnlyList<string> Sections);
 
-/// Bandas cualitativas del score (FR-010).
-public static class ScoreBands
-{
-    public const string Excellent = "Excellent";   // 80-100
-    public const string Strong = "Strong";         // 60-79
-    public const string Moderate = "Moderate";     // 40-59
-    public const string Weak = "Weak";             // 20-39
-    public const string Insufficient = "Insufficient"; // 0-19
+public sealed record MatchResult(
+    Requirement Requirement,
+    MatchTier Tier,
+    Placement Placement,
+    double Credit,
+    string? EvidenceSnippet);
 
-    public static string FromScore(int score) => score switch
-    {
-        >= 80 => Excellent,
-        >= 60 => Strong,
-        >= 40 => Moderate,
-        >= 20 => Weak,
-        _ => Insufficient
-    };
+public enum MatchTier
+{
+    None,
+    Exact,
+    Alias,
+    Lemma,
+    Related,
+    Fuzzy,
+}
+
+public enum Placement
+{
+    NotFound,
+    Prominent,
+    Buried,
 }
 ```
+
+## Pesos de los componentes (`ScoringEngine.cs:8-24`)
+
+```csharp
+public const double WMatch = 0.45;
+public const double WStructure = 0.20;
+public const double WAchievements = 0.20;
+public const double WFormat = 0.10;
+public const double WLength = 0.05;
+public const double FormatMeasurabilityV0 = 0.5;  // texto pegado, no PDF
+public const double FormatBaselineV0 = 0.75;
+public const string Version = "1.0.0";
+```
+
+La fórmula global (`ScoringEngine.ComputeOverall`):
+
+```
+numerator   = Σ (Weight * Measurability * SubScore)
+denominator = Σ (Weight * Measurability)
+overall     = round(100 * numerator / denominator, AwayFromZero)
+```
+
+`Measurability` ∈ [0, 1] indica qué tan observable es el componente en el input actual. Format arranca en 0.5 en v0 (texto pegado no permite detectar columnas/tablas/imágenes) — el resto arranca en 1.0. La renormalización sobre el denominador evita penalizar por información no disponible.
 
 ## Application Layer Types
 
@@ -77,32 +157,30 @@ public sealed record ScoreCvCommand(
 ```csharp
 namespace BuildCv.Api.Contracts;
 
+/// <summary>Vista HTTP del ScoreResult. La forma completa (incluyendo
+/// recommendations, formatIssues, gatesApplied, disclaimer) se expone al cliente.</summary>
 public sealed record ScoreResponseDto(
     int Score,
     string Band,
+    string Disclaimer,
     IReadOnlyList<ComponentBreakdownDto> Components,
-    IReadOnlyList<string> Present,
-    IReadOnlyList<string> Missing,
-    string EngineVersion);
+    IReadOnlyList<KeywordDto> Present,
+    IReadOnlyList<KeywordDto> Missing,
+    IReadOnlyList<KeywordDto> Partial,
+    IReadOnlyList<RecommendationDto> Recommendations,
+    IReadOnlyList<FormatIssueDto> FormatIssues,
+    IReadOnlyList<GateAppliedDto> GatesApplied,
+    string EngineVersion,
+    string LexiconVersion,
+    string ContextHash);
 
 public sealed record ComponentBreakdownDto(
     string Code,
     double Weight,
-    double Value,
-    string Rationale);
-
-public static class ScoreResponseMapper
-{
-    public static ScoreResponseDto Map(ScoreResult result) => new(
-        Score: result.Score,
-        Band: result.Band,
-        Components: result.Components
-            .Select(c => new ComponentBreakdownDto(c.Code, c.Weight, c.Value, c.Rationale))
-            .ToList(),
-        Present: result.Present,
-        Missing: result.Missing,
-        EngineVersion: result.EngineVersion);
-}
+    double SubScore,
+    double Measurability,
+    double Confidence,
+    string Summary);
 ```
 
 ## State Machine
@@ -112,23 +190,27 @@ public static class ScoreResponseMapper
    ↓
 [Validate input] ──invalid──→ [400 ProblemDetails]
    ↓ valid
-[Analyze job]  → jobKeywords
+[Extract job requirements] → JobRequirementSet
    ↓
-[Analyze CV]   → cvProfile
+[Extract CV profile]     → CvProfile
    ↓
-[Match skills] → MatchResult
+[Match each requirement]  → IReadOnlyList<MatchResult>  (cascada T0–T4)
    ↓
-[Compute components] → ComponentBreakdown[]
+[Compute 5 components]   → IReadOnlyList<ComponentScore>
    ↓
-[Renormalize weights] (skip non-observable)
+[Apply Gates]            → IReadOnlyList<GateApplied> (no-contact, no-experience, keyword-stuffing, partial-measurement)
    ↓
-[Aggregate to final score] → ScoreResult
+[Renormalize weights]    → overall (int 0-100)
    ↓
-[Generate recommendations]
+[Compute Band]           → ScoreBand (Bajo/Medio/Bueno/Fuerte)
    ↓
-Return ScoreResponseDto
+[Build recommendations]  → IReadOnlyList<Recommendation>
+   ↓
+[Build format issues]    → IReadOnlyList<FormatIssue>
+   ↓
+Return ScoreResponseDto (seal: EngineVersion + LexiconVersion + ContextHash)
 ```
 
 ## Persistence
 
-**NONE** (v0 mandate, Art. III). El score se calcula en memoria y se retorna al cliente.
+**NONE** (v0 mandate, Art. III). El score se calcula en memoria y se retorna al cliente. El `ContextHash` se sella en cada `ScoreResult` para reproducibilidad bit-a-bit (mismo input + misma versión del motor + misma versión del gazetteer + mismo hash de contexto = mismo número).

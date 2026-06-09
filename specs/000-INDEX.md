@@ -27,7 +27,7 @@
 | 002 | `score-engine` | v0 / M0 | ✅ SHIPPED | `main` | `1.0.0` |
 | 003 | `adapt-ia` | v0 / M1 | ✅ SHIPPED (StubAiClient) | `main` | `1.0.0` |
 | 004 | `export-pdf` | v0 / M2 | ✅ SHIPPED (QuestPDF) | `main` | `1.0.0` |
-| 005 | `cv-pdf-docx-import` | v0.5 / M3 | 📋 PLANEADO (specs ✅) | — | `1.0.0` (parser) |
+| 005 | `cv-pdf-docx-import` | v0.5 / M3 | ✅ SHIPPED | `main` | `1.0.0` (parser) |
 | 006 | `cv-editor` (frontend) | v0.5 / M4 | 📋 PLANEADO (specs ✅) | — | `0.5.0` (editor) |
 | 007 | `constitution-v1.1.0` | governance | ✅ RATIFICADA | `main` | — |
 | 008 | `observability` | v0.5.1 | 📋 PLANEADO | — | — |
@@ -53,10 +53,10 @@
 - **Quickstart:** [specs/002-score-engine/quickstart.md](./002-score-engine/quickstart.md)
 - **Tasks:** [specs/002-score-engine/tasks.md](./002-score-engine/tasks.md)
 - **Contracts:** [specs/002-score-engine/contracts/score-api.md](./002-score-engine/contracts/score-api.md)
-- **Endpoint:** `POST /api/v1/score` (rate-limited 60/h por IP, política "deterministic" → renombrada "score" en v1.1.0)
+- **Endpoint:** `POST /api/v1/score` (rate-limited 60/min por IP, política `"score"`)
 - **Engine version:** `1.0.0`
 - **Constitution compliance:** Art. II ✅, Art. VI ✅, Art. VIII ✅
-- **Tests:** 105 domain + 33 application + 10 integration = 148 total (subset es el motor)
+- **Tests:** 31 total (motor determinista, suite verificada)
 - **Commit:** `eded372` "BuildCv API (.NET 10) — motor de puntaje determinista" + `b37498d` (archival) + `9d17af3` (INDEX + artifacts)
 
 ### 003-adapt-ia (v0 / M1)
@@ -72,7 +72,7 @@
 - **Engine version:** `1.0.0`
 - **Status:** v0 usa `StubAiClient` (deterministic, sin LLM real, 0 costo). M1 habilitará `AnthropicAiClient` con Claude Sonnet 4 (gate Art. IX — ZDR contractual, NO verificado a la fecha de v1.1.0).
 - **Constitution compliance:** Art. I ✅ (CrossEntityValidator detecta invenciones), Art. V ✅ (PromptBuilder con bloques `<DATA nonce="...">`), Art. VI ✅, Art. VII ✅
-- **Tests:** ≥25 unit + 6/6 e2e (engram #1428)
+- **Tests:** 40 total (validation cascade + adapt pipeline, suite verificada)
 - **Commit:** `68baaf2` "feat(003-adapt-ia): adaptación con LLM, cero invención (Constitution Art. I)"
 
 ### 004-export-pdf (v0 / M2)
@@ -88,8 +88,24 @@
 - **Engine version:** `1.0.0` (ScoreEngine), `004-export-pdf` (PdfMetadata.ModelVersion)
 - **Status:** QuestPDF con Community License, layout con header/content/footer, marca de agua honesta "No es un puntaje ATS oficial".
 - **Constitution compliance:** Art. I ✅ (ValidationGate bloquea Hard invenciones con 422), Art. III ✅ (PDF en memoria, sin persistencia), Art. IV ✅ (filename "cv-adapted-", watermark honesto), Art. VI ✅, Art. VII ✅
-- **Tests:** ≥16 unit + e2e pass (engram #1429)
+- **Tests:** 16 total (`QuestPdfGenerator` unit + integration, suite verificada; e2e suite pendiente verificación cuantitativa — MEDIUM)
 - **Commit:** `635d688` "feat(004-export-pdf): export CV adaptado a PDF (Constitution Art. I, IV)"
+
+### 005-cv-pdf-docx-import (v0.5 / M3)
+
+- **Spec:** [specs/005-cv-pdf-docx-import/spec.md](./005-cv-pdf-docx-import/spec.md)
+- **Plan:** [specs/005-cv-pdf-docx-import/plan.md](./005-cv-pdf-docx-import/plan.md)
+- **Research:** [specs/005-cv-pdf-docx-import/research.md](./005-cv-pdf-docx-import/research.md)
+- **Data model:** [specs/005-cv-pdf-docx-import/data-model.md](./005-cv-pdf-docx-import/data-model.md)
+- **Quickstart:** [specs/005-cv-pdf-docx-import/quickstart.md](./005-cv-pdf-docx-import/quickstart.md)
+- **Tasks:** [specs/005-cv-pdf-docx-import/tasks.md](./005-cv-pdf-docx-import/tasks.md)
+- **Contracts:** [specs/005-cv-pdf-docx-import/contracts/import-api.md](./005-cv-pdf-docx-import/contracts/import-api.md)
+- **Endpoint:** `POST /api/v1/import` (rate-limited 30/h por IP, política `"import"`, NUEVA per v1.1.0)
+- **Engine version:** `1.0.0` (parser adapter)
+- **Status:** PdfPig (Apache-2.0) para PDF + DocumentFormat.OpenXml (MIT) para DOCX, server-side parsing, multipart 5 MB, validación dual (header + magic bytes), output `{ text, sections[], warnings[], engineVersion, traceId }`. `ParserRouter` selecciona adaptador por MIME/magic bytes.
+- **Constitution compliance:** Art. III ✅ (no persistencia server-side, todo en RAM), Art. V ✅ (parsed text se trata como DATO), Art. VI ✅ (`ICvParser` puerto oficial v1.1.0), Art. VII ✅ (rate-limit `"import"` 30/h).
+- **Commit:** `c61bdf4` "feat(005-cv-pdf-docx-import): parseo server-side de CV (PDF/DOCX, Constitution Art. III/V/VI/VII)"
+- **Web counterpart:** [../../BuildCv-web/specs/005-web-cv-import-ui/](../../BuildCv-web/specs/005-web-cv-import-ui/) (mismo status, ship coordinado).
 
 ### 007-constitution-v1.1.0 (governance)
 
@@ -103,25 +119,6 @@
 - **Tipo:** Enmienda MENOR (semver 1.0.0 → 1.1.0), 5 artículos modificados, ~30 líneas modificadas + ~15 añadidas, 0 líneas eliminadas.
 - **Aprobación:** pendiente del owner (enmienda requiere aprobación explícita per §Gobernanza).
 - **Aplicada:** ✅ la constitución física `BuildCv-api/.specify/memory/constitution.md` ya está en v1.1.0 con historial registrado.
-
-## Features PLANEADAS con specs completas (esperando implementación)
-
-### 005-cv-pdf-docx-import (v0.5 / M3)
-
-- **Spec:** [specs/005-cv-pdf-docx-import/spec.md](./005-cv-pdf-docx-import/spec.md)
-- **Plan:** [specs/005-cv-pdf-docx-import/plan.md](./005-cv-pdf-docx-import/plan.md)
-- **Research:** [specs/005-cv-pdf-docx-import/research.md](./005-cv-pdf-docx-import/research.md)
-- **Data model:** [specs/005-cv-pdf-docx-import/data-model.md](./005-cv-pdf-docx-import/data-model.md)
-- **Quickstart:** [specs/005-cv-pdf-docx-import/quickstart.md](./005-cv-pdf-docx-import/quickstart.md)
-- **Tasks:** [specs/005-cv-pdf-docx-import/tasks.md](./005-cv-pdf-docx-import/tasks.md)
-- **Contracts:** [specs/005-cv-pdf-docx-import/contracts/import-api.md](./005-cv-pdf-docx-import/contracts/import-api.md)
-- **Endpoint planeado:** `POST /api/v1/import` (rate-limited 30/h por IP, política "import", NUEVA per v1.1.0)
-- **Engine version planeada:** `1.0.0` (parser adapter)
-- **Decisiones locked:** PdfPig (Apache-2.0) para PDF, DocumentFormat.OpenXml (MIT) para DOCX, server-side parsing, multipart 5 MB, validación dual (header + magic bytes), output `{ text, sections[], warnings[], engineVersion, traceId }`.
-- **Constitution compliance:** Art. III ✅ (no persistencia server-side), Art. V ✅ (parsed text se trata como DATO), Art. VI ✅ (`ICvParser` puerto), Art. VII ✅ (rate-limit "import" 30/h).
-- **Tasks count:** ~80 unit + integration tests.
-- **Open questions:** 5 (extracción de imágenes, soporte de idioma extra, .doc legacy, tamaño 5 MB vs 8 MB, reintento en engine exception).
-- **Web counterpart:** [../../BuildCv-web/specs/005-web-cv-import-ui/](../../BuildCv-web/specs/005-web-cv-import-ui/) (también spec'd, mismo status).
 
 ### 006-cv-editor (v0.5 / M4, frontend only)
 

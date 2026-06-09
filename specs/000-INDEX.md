@@ -28,7 +28,7 @@
 | 003 | `adapt-ia` | v0 / M1 | ✅ SHIPPED (StubAiClient) | `main` | `1.0.0` |
 | 004 | `export-pdf` | v0 / M2 | ✅ SHIPPED (QuestPDF) | `main` | `1.0.0` |
 | 005 | `cv-pdf-docx-import` | v0.5 / M3 | ✅ SHIPPED | `main` | `1.0.0` (parser) |
-| 006 | `cv-editor` (frontend) | v0.5 / M4 | 📋 PLANEADO (specs ✅) | — | `0.5.0` (editor) |
+| 006 | `cv-editor` (frontend) | v0.5 / M4 | ✅ SHIPPED (`BuildCv-web`) | — | `0.5.0` (editor) |
 | 007 | `constitution-v1.1.0` | governance | ✅ RATIFICADA | `main` | — |
 | 008 | `observability` | v0.5.1 | 📋 PLANEADO | — | — |
 | 009 | `auth` | v1 | 📋 PLANEADO | — | — |
@@ -41,6 +41,8 @@
 - 🚧 **EN CURSO** — implementación activa
 - 📋 **PLANEADO** — los 7 artifacts están escritos; esperando ventana de implementación
 - 🗄️ **ARCHIVADO** — feature antigua, conservada solo para historia
+
+> **Convención de numeración cross-repo:** Los números 002–005 son correlativos (tienen contraparte frontend+backend = mismo producto). A partir de 006, cada repo (`BuildCv-api` / `BuildCv-web`) tiene su propia secuencia para features independientes. Ver también `BuildCv-web/specs/000-INDEX.md`.
 
 ## Features SHIPPED (detalle)
 

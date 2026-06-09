@@ -7,7 +7,7 @@
 **Input**: User description: "Carga de archivos PDF/DOCX del CV (parseo server-side) para alimentar el editor 006 con texto extraído en vez de pegarlo a mano."
 
 > **Frontend counterpart:** [../../../BuildCv-web/specs/005-web-cv-import-ui/](../../../BuildCv-web/specs/005-web-cv-import-ui/)
-> **Handoff downstream:** [../../../BuildCv-api/specs/006-cv-editor/](../../../BuildCv-api/specs/006-cv-editor/) (planeado) — el editor recibe `ImportResult.text` y `ImportResult.sections` como semilla.
+> **Handoff downstream:** [../../../BuildCv-web/specs/006-web-cv-editor/](../../../BuildCv-web/specs/006-web-cv-editor/) (✅ SHIPPED) — el editor recibe `ImportResult.text` y `ImportResult.sections` como semilla.
 > **INDEX global:** [../000-INDEX.md](../000-INDEX.md)
 
 ---

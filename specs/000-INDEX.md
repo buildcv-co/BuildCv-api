@@ -3,7 +3,7 @@
 > **Este archivo es el entry point oficial al estado del producto BuildCv.**
 > Cualquier agente o humano que necesite saber "qué está hecho, qué está en curso, qué falta" debe leer esto primero.
 
-**Última actualización:** 2026-06-09 (post-enmienda constitucional v1.0.0 → v1.1.0)
+**Última actualización:** 2026-06-09 (006 frontend-only clarificado, próximos pasos actualizados)
 
 ## Constitución vigente
 
@@ -28,9 +28,9 @@
 | 003 | `adapt-ia` | v0 / M1 | ✅ SHIPPED (StubAiClient) | `main` | `1.0.0` |
 | 004 | `export-pdf` | v0 / M2 | ✅ SHIPPED (QuestPDF) | `main` | `1.0.0` |
 | 005 | `cv-pdf-docx-import` | v0.5 / M3 | ✅ SHIPPED | `main` | `1.0.0` (parser) |
-| 006 | `cv-editor` (frontend) | v0.5 / M4 | ✅ SHIPPED (`BuildCv-web`) | — | `0.5.0` (editor) |
+| 006 | `cv-editor` (frontend only, ver [006-cv-editor/](./006-cv-editor/)) | v0.5 / M4 | ✅ SHIPPED (`BuildCv-web`) | — | `0.5.0` (editor) |
 | 007 | `constitution-v1.1.0` | governance | ✅ RATIFICADA | `main` | — |
-| 008 | `observability` | v0.5.1 | 📋 PLANEADO | — | — |
+| 008 | `observability` | v0.5.1 | 📋 PLANEADO (specs listas) | `008-observability` | — |
 | 009 | `auth` | v1 | 📋 PLANEADO | — | — |
 | 010 | `persistence` | v1 | 📋 PLANEADO | — | — |
 | 011 | `payments` | v1 | 📋 PLANEADO | — | — |
@@ -122,9 +122,9 @@
 - **Aprobación:** pendiente del owner (enmienda requiere aprobación explícita per §Gobernanza).
 - **Aplicada:** ✅ la constitución física `BuildCv-api/.specify/memory/constitution.md` ya está en v1.1.0 con historial registrado.
 
-### 006-web-cv-editor + 006b-web-cv-diff-viewer (v0.5 / M4, frontend only)
+### 006-cv-editor (frontend only, ver [006-cv-editor/](./006-cv-editor/))
 
-Estas features viven enteramente en `BuildCv-web/`. El API no recibe cambios: re-usa `AdaptCvCommand` y `ScoreCvCommand` con el texto editado por el usuario.
+Este feature NO tiene implementación en el backend. El API no recibe cambios: re-usa `AdaptCvCommand` y `ScoreCvCommand` con el texto editado por el usuario. Specs completas (7 artifacts) en esta carpeta, con cross-references a `BuildCv-web/specs/006-web-cv-editor/` y `BuildCv-web/specs/006-web-cv-diff-viewer/`.
 
 **006-web-cv-editor:**
 - **Spec:** [../../BuildCv-web/specs/006-web-cv-editor/spec.md](../../BuildCv-web/specs/006-web-cv-editor/spec.md)
@@ -155,8 +155,15 @@ Estas features viven enteramente en `BuildCv-web/`. El API no recibe cambios: re
 
 ### 008-observability (v0.5.1)
 
-- **Planeado:** Métricas con Prometheus, tracing distribuido con OpenTelemetry, health checks más detallados, structured logging mejorado.
-- **Bloqueado por:** Ninguno. Spec aún no escrito.
+- **Spec:** [specs/008-observability/spec.md](./008-observability/spec.md)
+- **Plan:** [specs/008-observability/plan.md](./008-observability/plan.md)
+- **Research:** [specs/008-observability/research.md](./008-observability/research.md)
+- **Data model:** [specs/008-observability/data-model.md](./008-observability/data-model.md)
+- **Quickstart:** [specs/008-observability/quickstart.md](./008-observability/quickstart.md)
+- **Tasks:** [specs/008-observability/tasks.md](./008-observability/tasks.md)
+- **Contracts:** [specs/008-observability/contracts/observability-api.md](./008-observability/contracts/observability-api.md)
+- **Bloqueado por:** Ninguno. Specs listas, listo para implementación.
+- **Branch:** `008-observability`
 
 ### 009-auth (v1)
 
@@ -183,9 +190,9 @@ Estas features viven enteramente en `BuildCv-web/`. El API no recibe cambios: re
 
 ## Próximos pasos (recomendados, en orden de planificación)
 
-1. **005-cv-pdf-docx-import (backend + web)** — spec'd, listo para implementación. Núcleo de v0.5.
-2. **006-web-cv-editor + 006-web-cv-diff-viewer (web)** — spec'd, listo para implementación. Núcleo de v0.5.
-3. **008-observability (backend)** — M3 operacional, decisiones data-driven.
+1. ~~**005-cv-pdf-docx-import**~~ → ✅ SHIPPED (commit `c61bdf4`)
+2. ~~**006-web-cv-editor + 006b-web-cv-diff-viewer**~~ → ✅ SHIPPED en `BuildCv-web` (commits `748611d` + `4bf92b7`)
+3. **008-observability (backend)** — sin gates, spec aún no escrita. Siguiente en orden numérico.
 4. **009-auth, 010-persistence, 011-payments (v1)** — bloqueados por gates Art. IX (ZDR + Habeas Data + Wompi confirmation).
 
 ## Reglas de mantenimiento

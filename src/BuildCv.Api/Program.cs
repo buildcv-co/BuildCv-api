@@ -7,6 +7,9 @@ using BuildCv.Application;
 using BuildCv.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+using Prometheus;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
@@ -44,7 +47,17 @@ builder.Services.AddApiVersioning(options =>
 // Health checks: 'live' (proceso vivo) y 'ready' (listo para servir, incluye config de IA).
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy("Proceso vivo."), tags: ["live", "ready"])
-    .AddCheck<AiConfigHealthCheck>("ai-config", tags: ["ready"]);
+    .AddCheck<AiConfigHealthCheck>("ai-config", tags: ["ready"])
+    .AddCheck<ParserHealthCheck>("parser", tags: ["ready"])
+    .AddCheck<AiClientHealthCheck>("ai-client", tags: ["ready"])
+    .AddCheck<PdfGeneratorHealthCheck>("pdf-generator", tags: ["ready"]);
+
+// Prometheus metrics + OpenTelemetry tracing.
+builder.Services.AddMetrics();
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddOtlpExporter());
 
 // CORS para el frontend. El BFF de Next.js llama al backend en same-origin (server-to-server),
 // por lo que CORS solo habilita pruebas directas/Scalar; los orígenes vienen de configuración.
@@ -74,6 +87,7 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 app.UseSerilogRequestLogging();
+app.UseHttpMetrics();
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
@@ -86,6 +100,7 @@ app.UseCors("frontend");
 app.UseRateLimiter();
 
 app.MapHealthEndpoints();
+app.MapMetrics();
 app.MapScoringEndpoints();
 app.MapAdaptEndpoints();
 app.MapExportEndpoints();

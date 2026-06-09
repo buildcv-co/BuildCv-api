@@ -1,4 +1,6 @@
 using BuildCv.Application.Features.Adapt;
+using BuildCv.Application.Features.Auth;
+using BuildCv.Application.Features.Consent;
 using BuildCv.Application.Features.Export;
 using BuildCv.Application.Features.Import;
 using BuildCv.Application.Features.Scoring;
@@ -35,6 +37,22 @@ public static class DependencyInjection
 
         services.AddSingleton<IValidator<ImportCvCommand>, ImportCvValidator>();
         services.AddSingleton<ImportCvHandler>();
+
+        services.AddSingleton<InMemoryConsentStore>();
+        services.AddSingleton<InMemoryUserDataStore>();
+        services.AddSingleton<IUserDataService>(sp => new InMemoryUserDataService(sp.GetRequiredService<InMemoryUserDataStore>()));
+        services.AddSingleton<GoogleOAuthCallbackHandler>();
+        services.AddSingleton<LinkedInOAuthCallbackHandler>();
+        services.AddSingleton<RefreshTokenHandler>();
+        services.AddSingleton<LogoutHandler>();
+        services.AddSingleton<GrantConsentHandler>();
+        services.AddSingleton<RevokeConsentHandler>();
+        services.AddSingleton<HasActiveConsentHandler>();
+        services.AddSingleton<GetConsentHistoryHandler>();
+        services.AddSingleton<GetUserDataHandler>();
+        services.AddSingleton<RectifyUserDataHandler>();
+        services.AddSingleton<DeleteUserDataHandler>();
+        services.AddSingleton<PrivacyPolicyQueryHandler>();
 
         return services;
     }

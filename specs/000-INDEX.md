@@ -3,7 +3,7 @@
 > **Este archivo es el entry point oficial al estado del producto BuildCv.**
 > Cualquier agente o humano que necesite saber "qué está hecho, qué está en curso, qué falta" debe leer esto primero.
 
-**Última actualización:** 2026-06-09 (006 frontend-only clarificado, próximos pasos actualizados)
+**Última actualización:** 2026-06-09 (009-auth implemented, specs migrated from openspec/ to specs/)
 
 ## Constitución vigente
 
@@ -31,7 +31,7 @@
 | 006 | `cv-editor` (frontend only, ver [006-cv-editor/](./006-cv-editor/)) | v0.5 / M4 | ✅ SHIPPED (`BuildCv-web`) | — | `0.5.0` (editor) |
 | 007 | `constitution-v1.1.0` | governance | ✅ RATIFICADA | `main` | — |
 | 008 | `observability` | v0.5.1 | ✅ SHIPPED | `main` | — |
-| 009 | `auth` | v1 | 📋 PLANEADO | — | — |
+| 009 | `auth` | v1 | ✅ SHIPPED (47 tasks, 290 tests) | `main` | — |
 | 010 | `persistence` | v1 | 📋 PLANEADO | — | — |
 | 011 | `payments` | v1 | 📋 PLANEADO | — | — |
 
@@ -151,7 +151,7 @@ Este feature NO tiene implementación en el backend. El API no recibe cambios: r
 - **Constitution compliance:** Art. I ✅ (bloquea "Aceptar y exportar" si hay invenciones Hard), Art. V ✅ (diff no se renderiza como HTML)
 - **Commit:** `4bf92b7`
 
-## Features PLANEADAS sin specs
+## Features SHIPPED (detalle)
 
 ### 008-observability (v0.5.1)
 
@@ -170,8 +170,18 @@ Este feature NO tiene implementación en el backend. El API no recibe cambios: r
 
 ### 009-auth (v1)
 
-- **Planeado:** Cuentas de usuario, OAuth con Google/LinkedIn, historial de scores y adaptaciones.
-- **Bloqueado por:** gate ZDR (Art. IX) debe estar verificado contractualmente. Anthropic Enterprise pendiente.
+- **Spec:** [specs/009-auth/spec.md](./009-auth/spec.md)
+- **Plan:** [specs/009-auth/plan.md](./009-auth/plan.md)
+- **Research:** [specs/009-auth/research.md](./009-auth/research.md)
+- **Data model:** [specs/009-auth/data-model.md](./009-auth/data-model.md)
+- **Quickstart:** [specs/009-auth/quickstart.md](./009-auth/quickstart.md)
+- **Tasks:** [specs/009-auth/tasks.md](./009-auth/tasks.md)
+- **Contracts:** [specs/009-auth/contracts/auth-api.md](./009-auth/contracts/auth-api.md), [specs/009-auth/contracts/user-data-api.md](./009-auth/contracts/user-data-api.md)
+- **Endpoints:** `POST /auth/google`, `POST /auth/linkedin`, `GET /auth/me`, `POST /auth/refresh`, `POST /auth/logout`, `GET/PUT/DELETE /user/data`, `POST /user/consent`, `POST /user/consent/revoke`, `GET /privacy-policy`
+- **Status:** OAuth 2.0 (Google + LinkedIn), JWT access/refresh tokens, Habeas Data compliance (consent, ARCO rights, privacy policy), in-memory stores for v0.5
+- **Tests:** 290 total (65 auth unit + 27 integration tests)
+- **Constitution compliance:** Art. III ✅ (no PII in logs), Art. IV ✅ (honest privacy policy), Art. VI ✅ (Clean Architecture ports), Art. IX ✅ (Habeas Data: consent, ARCO, audit trail)
+- **Deviations:** In-memory stores in Application layer (not Infrastructure), PKCE not implemented, error responses not RFC 9457
 
 ### 010-persistence (v1)
 
@@ -195,8 +205,10 @@ Este feature NO tiene implementación en el backend. El API no recibe cambios: r
 
 1. ~~**005-cv-pdf-docx-import**~~ → ✅ SHIPPED (commit `c61bdf4`)
 2. ~~**006-web-cv-editor + 006b-web-cv-diff-viewer**~~ → ✅ SHIPPED en `BuildCv-web` (commits `748611d` + `4bf92b7`)
-3. **008-observability (backend)** — sin gates, spec aún no escrita. Siguiente en orden numérico.
-4. **009-auth, 010-persistence, 011-payments (v1)** — bloqueados por gates Art. IX (ZDR + Habeas Data + Wompi confirmation).
+3. ~~**008-observability (backend)**~~ → ✅ SHIPPED (commit `4975966`)
+4. ~~**009-auth**~~ → ✅ SHIPPED (47 tasks, 290 tests, specs migrated)
+5. **010-persistence** — requiere 009-auth (ya implementado), sin gates externos
+6. **011-payments** — bloqueado por gate Wompi (RUT + registro empresarial)
 
 ## Reglas de mantenimiento
 

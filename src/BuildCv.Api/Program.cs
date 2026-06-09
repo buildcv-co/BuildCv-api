@@ -1,3 +1,4 @@
+using System.Text;
 using Asp.Versioning;
 using BuildCv.Api.Endpoints;
 using BuildCv.Api.Errors;
@@ -5,8 +6,10 @@ using BuildCv.Api.Health;
 using BuildCv.Api.Security;
 using BuildCv.Application;
 using BuildCv.Infrastructure;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Prometheus;
@@ -71,6 +74,27 @@ builder.Services.AddCors(options => options.AddPolicy("frontend", policy => poli
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
+var jwtSigningKey = builder.Configuration["Jwt:SigningKey"] ?? "default-dev-signing-key-that-is-long-enough-for-hmac-sha256!";
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "buildcv";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "buildcv";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtIssuer,
+            ValidateAudience = true,
+            ValidAudience = jwtAudience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30),
+        };
+    });
+builder.Services.AddAuthorization();
+
 // Anti-abuso por IP (rate limiting nativo).
 builder.Services.AddAppRateLimiting();
 
@@ -97,6 +121,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("frontend");
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapHealthEndpoints();
@@ -105,6 +131,9 @@ app.MapScoringEndpoints();
 app.MapAdaptEndpoints();
 app.MapExportEndpoints();
 app.MapImportEndpoints();
+app.MapAuthEndpoints();
+app.MapUserDataEndpoints();
+app.MapPrivacyEndpoints();
 
 app.Run();
 

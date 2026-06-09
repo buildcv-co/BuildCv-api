@@ -1,10 +1,12 @@
 using BuildCv.Application.Features.Adapt;
+using BuildCv.Application.Features.Auth;
 using BuildCv.Application.Features.Export;
 using BuildCv.Application.Features.Import;
 using BuildCv.Domain.Adapt;
 using BuildCv.Domain.Export;
 using BuildCv.Domain.Lexicon;
 using BuildCv.Infrastructure.Ai;
+using BuildCv.Infrastructure.Auth;
 using BuildCv.Infrastructure.Lexicon;
 using BuildCv.Infrastructure.Parsing;
 using BuildCv.Infrastructure.Pdf;
@@ -54,6 +56,22 @@ public static class DependencyInjection
         services.AddSingleton<ImportCvHandler>(sp => new ImportCvHandler(
             sp.GetRequiredService<ICvParser>(),
             sp.GetRequiredService<IValidator<ImportCvCommand>>()));
+
+        services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
+        services.AddSingleton<JwtTokenAdapter>(sp => new JwtTokenAdapter(
+            configuration["Jwt:SigningKey"] ?? "default-dev-signing-key-that-is-long-enough-for-hmac-sha256!",
+            configuration["Jwt:Issuer"] ?? "buildcv",
+            configuration["Jwt:Audience"] ?? "buildcv"));
+        services.AddSingleton<GoogleOAuthAdapter>(sp =>
+            new GoogleOAuthAdapter(new HttpClient(), configuration["Google:ClientId"] ?? "", configuration["Google:ClientSecret"] ?? ""));
+        services.AddSingleton<LinkedInOAuthAdapter>(sp =>
+            new LinkedInOAuthAdapter(new HttpClient(), configuration["LinkedIn:ClientId"] ?? "", configuration["LinkedIn:ClientSecret"] ?? ""));
+        services.AddSingleton<IAuthenticationService>(sp =>
+        {
+            var googleAdapter = sp.GetRequiredService<GoogleOAuthAdapter>();
+            var linkedinAdapter = sp.GetRequiredService<LinkedInOAuthAdapter>();
+            return new CompositeOAuthAdapter(googleAdapter, linkedinAdapter);
+        });
 
         return services;
     }

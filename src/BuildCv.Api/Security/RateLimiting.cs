@@ -9,6 +9,8 @@ public static class RateLimiting
     public const string AiPolicy = "ai";
     public const string ExportPolicy = "export";
     public const string ImportPolicy = "import";
+    public const string AuthPolicy = "auth";
+    public const string ConsentPolicy = "consent";
 
     public static IServiceCollection AddAppRateLimiting(this IServiceCollection services)
     {
@@ -53,6 +55,26 @@ public static class RateLimiting
                     {
                         PermitLimit = 30,
                         Window = TimeSpan.FromHours(1),
+                        QueueLimit = 0,
+                    }));
+
+            options.AddPolicy(AuthPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: ClientKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 30,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                    }));
+
+            options.AddPolicy(ConsentPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: ClientKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0,
                     }));
         });

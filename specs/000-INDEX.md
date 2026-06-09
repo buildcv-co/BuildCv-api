@@ -122,17 +122,34 @@
 - **Aprobación:** pendiente del owner (enmienda requiere aprobación explícita per §Gobernanza).
 - **Aplicada:** ✅ la constitución física `BuildCv-api/.specify/memory/constitution.md` ya está en v1.1.0 con historial registrado.
 
-### 006-cv-editor (v0.5 / M4, frontend only)
+### 006-web-cv-editor + 006b-web-cv-diff-viewer (v0.5 / M4, frontend only)
 
-Esta feature vive enteramente en `BuildCv-web/`. El API no recibe cambios: re-usa `AdaptCvCommand` y `ScoreCvCommand` con el texto editado por el usuario.
+Estas features viven enteramente en `BuildCv-web/`. El API no recibe cambios: re-usa `AdaptCvCommand` y `ScoreCvCommand` con el texto editado por el usuario.
 
+**006-web-cv-editor:**
 - **Spec:** [../../BuildCv-web/specs/006-web-cv-editor/spec.md](../../BuildCv-web/specs/006-web-cv-editor/spec.md)
+- **Plan:** [../../BuildCv-web/specs/006-web-cv-editor/plan.md](../../BuildCv-web/specs/006-web-cv-editor/plan.md)
+- **Research:** [../../BuildCv-web/specs/006-web-cv-editor/research.md](../../BuildCv-web/specs/006-web-cv-editor/research.md)
+- **Data model:** [../../BuildCv-web/specs/006-web-cv-editor/data-model.md](../../BuildCv-web/specs/006-web-cv-editor/data-model.md)
+- **Quickstart:** [../../BuildCv-web/specs/006-web-cv-editor/quickstart.md](../../BuildCv-web/specs/006-web-cv-editor/quickstart.md)
 - **Tasks:** [../../BuildCv-web/specs/006-web-cv-editor/tasks.md](../../BuildCv-web/specs/006-web-cv-editor/tasks.md)
-- **Y la sub-feature de diff:** [../../BuildCv-web/specs/006-web-cv-diff-viewer/spec.md](../../BuildCv-web/specs/006-web-cv-diff-viewer/spec.md)
-- **Engine version planeada:** `0.5.0` (editor)
-- **Decisiones locked:** Tiptap v2 (MIT) + Zod v3 (defense in depth Art. I FR-029a) + `ICvStore` port (Art. VI v1.1.0) con `LocalStorageCvStore` y `IndexedDbCvStore` adapters + Zustand v4 + jsdiff v5 para el diff viewer.
+- **Contracts:** [../../BuildCv-web/specs/006-web-cv-editor/contracts/frontend-internal.md](../../BuildCv-web/specs/006-web-cv-editor/contracts/frontend-internal.md)
+- **Engine version:** `0.5.0` (editor)
+- **Decisiones shipped:** Zod v3 (8 schemas, defense in depth Art. I FR-029a) + `ICvStore` port (Art. VI v1.1.0) con `LocalStorageCvStore` (default). **Tiptap NO instalado** — 8 textareas estructurados en su lugar (deuda técnica documentada para v1). Zustand NO instalado.
 - **Constitution compliance:** Art. I ✅ (FR-029a editor no agrega entidades), Art. III ✅ (FR-040b "Limpiar borrador" obligatorio), Art. VI ✅ (`ICvStore` puerto oficial).
-- **Open questions:** 7 (single vs multi-draft, mapeo de import a secciones, bundle size, persistencia del mode del diff, handoff button location, Vitest en v0.5, a11y del Tiptap).
+- **Commit:** `748611d`
+
+**006-web-cv-diff-viewer (sub-feature):**
+- **Spec:** [../../BuildCv-web/specs/006-web-cv-diff-viewer/spec.md](../../BuildCv-web/specs/006-web-cv-diff-viewer/spec.md)
+- **Plan:** [../../BuildCv-web/specs/006-web-cv-diff-viewer/plan.md](../../BuildCv-web/specs/006-web-cv-diff-viewer/plan.md)
+- **Research:** [../../BuildCv-web/specs/006-web-cv-diff-viewer/research.md](../../BuildCv-web/specs/006-web-cv-diff-viewer/research.md)
+- **Data model:** [../../BuildCv-web/specs/006-web-cv-diff-viewer/data-model.md](../../BuildCv-web/specs/006-web-cv-diff-viewer/data-model.md)
+- **Quickstart:** [../../BuildCv-web/specs/006-web-cv-diff-viewer/quickstart.md](../../BuildCv-web/specs/006-web-cv-diff-viewer/quickstart.md)
+- **Tasks:** [../../BuildCv-web/specs/006-web-cv-diff-viewer/tasks.md](../../BuildCv-web/specs/006-web-cv-diff-viewer/tasks.md)
+- **Contracts:** [../../BuildCv-web/specs/006-web-cv-diff-viewer/contracts/frontend-internal.md](../../BuildCv-web/specs/006-web-cv-diff-viewer/contracts/frontend-internal.md)
+- **Stack:** `diff` (jsdiff v5, BSD-3-Clause) + custom React renderer
+- **Constitution compliance:** Art. I ✅ (bloquea "Aceptar y exportar" si hay invenciones Hard), Art. V ✅ (diff no se renderiza como HTML)
+- **Commit:** `4bf92b7`
 
 ## Features PLANEADAS sin specs
 

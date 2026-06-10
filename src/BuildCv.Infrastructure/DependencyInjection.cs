@@ -2,11 +2,13 @@ using BuildCv.Application.Features.Adapt;
 using BuildCv.Application.Features.Auth;
 using BuildCv.Application.Features.Export;
 using BuildCv.Application.Features.Import;
+using BuildCv.Application.Features.Invoicing;
 using BuildCv.Domain.Adapt;
 using BuildCv.Domain.Export;
 using BuildCv.Domain.Lexicon;
 using BuildCv.Infrastructure.Ai;
 using BuildCv.Infrastructure.Auth;
+using BuildCv.Infrastructure.Invoicing;
 using BuildCv.Infrastructure.Lexicon;
 using BuildCv.Infrastructure.Parsing;
 using BuildCv.Infrastructure.Pdf;
@@ -98,6 +100,21 @@ public static class DependencyInjection
             services.AddSingleton<IUserDataStore, InMemoryUserDataStore>();
             services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
             services.AddSingleton<IUserDataService>(sp => new InMemoryUserDataService(sp.GetRequiredService<IUserDataStore>()));
+        }
+
+        // Invoicing services
+        services.Configure<FactusSettings>(configuration.GetSection("Factus"));
+        services.AddSingleton<INumberingRangeStore, InMemoryNumberingRangeStore>();
+        services.AddSingleton<IInvoiceStore, InMemoryInvoiceStore>();
+
+        var factusEnabled = configuration.GetValue<bool>("Factus:Enabled");
+        if (factusEnabled)
+        {
+            services.AddHttpClient<IInvoiceProvider, FactusAdapter>();
+        }
+        else
+        {
+            services.AddSingleton<IInvoiceProvider, LocalInvoiceProvider>();
         }
 
         return services;

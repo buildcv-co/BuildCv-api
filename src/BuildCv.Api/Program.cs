@@ -155,6 +155,7 @@ app.MapImportEndpoints();
 app.MapAuthEndpoints();
 app.MapUserDataEndpoints();
 app.MapPrivacyEndpoints();
+app.MapInvoicingEndpoints();
 
 app.Run();
 

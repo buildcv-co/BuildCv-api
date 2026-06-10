@@ -3,7 +3,7 @@
 > **Este archivo es el entry point oficial al estado del producto BuildCv.**
 > Cualquier agente o humano que necesite saber "qué está hecho, qué está en curso, qué falta" debe leer esto primero.
 
-**Última actualización:** 2026-06-09 (009-auth implemented, specs migrated from openspec/ to specs/)
+**Última actualización:** 2026-06-09 (010-persistence shipped, 011-factus specs created)
 
 ## Constitución vigente
 
@@ -32,8 +32,8 @@
 | 007 | `constitution-v1.1.0` | governance | ✅ RATIFICADA | `main` | — |
 | 008 | `observability` | v0.5.1 | ✅ SHIPPED | `main` | — |
 | 009 | `auth` | v1 | ✅ SHIPPED (47 tasks, 290 tests) | `main` | — |
-| 010 | `persistence` | v1 | 📋 PLANEADO | — | — |
-| 011 | `payments` | v1 | 📋 PLANEADO | — | — |
+| 010 | `persistence` | v1 | ✅ SHIPPED (38 tasks, 342 tests) | `main` | — |
+| 011 | `factus` | v1 | 📋 PLANEADO | — | — |
 
 ## Leyenda de status
 
@@ -196,10 +196,18 @@ Este feature NO tiene implementación en el backend. El API no recibe cambios: r
 - **Architecture:** IConsentStore + IUserDataStore interfaces in Application, EfConsentStore/EfUserDataStore/EfRefreshTokenStore adapters in Infrastructure, BuildCvDbContext with PostgreSQL
 - **Constitution compliance:** Art. VI ✅ (ports in Application, adapters in Infrastructure), Art. IX ✅ (consent + ARCO persistence for legal compliance)
 
-### 011-payments (v1)
+### 011-factus (v1)
 
-- **Planeado:** Wompi Colombia (PSE, Nequi, Daviplata), créditos por uso, facturación conforme a DIAN.
-- **Bloqueado por:** gates Art. IX (ZDR + Habeas Data) + servidor de pagos con confirmación server-side.
+- **Spec:** [specs/011-factus/spec.md](./011-factus/spec.md)
+- **Plan:** [specs/011-factus/plan.md](./011-factus/plan.md)
+- **Research:** [specs/011-factus/research.md](./011-factus/research.md)
+- **Data model:** [specs/011-factus/data-model.md](./011-factus/data-model.md)
+- **Quickstart:** [specs/011-factus/quickstart.md](./011-factus/quickstart.md)
+- **Tasks:** [specs/011-factus/tasks.md](./011-factus/tasks.md)
+- **Contracts:** [specs/011-factus/contracts/](./011-factus/contracts/)
+- **Status:** Specs completas (7 artifacts), 34 tareas definidas. Plugin opcional para facturación DIAN vía Factus API v2.
+- **Architecture:** IInvoiceProvider port in Application, FactusAdapter + LocalInvoiceProvider in Infrastructure, feature flag `Factus:Enabled`
+- **Constitution compliance:** Art. VI ✅ (ports in Application, adapters in Infrastructure), Art. IX ✅ (facturación DIAN opcional, no bloquea uso del sistema)
 
 ## Features ARCHIVADAS
 
@@ -215,8 +223,8 @@ Este feature NO tiene implementación en el backend. El API no recibe cambios: r
 2. ~~**006-web-cv-editor + 006b-web-cv-diff-viewer**~~ → ✅ SHIPPED en `BuildCv-web` (commits `748611d` + `4bf92b7`)
 3. ~~**008-observability (backend)**~~ → ✅ SHIPPED (commit `4975966`)
 4. ~~**009-auth**~~ → ✅ SHIPPED (47 tasks, 290 tests, specs migrated)
-5. **010-persistence** — requiere 009-auth (ya implementado), sin gates externos
-6. **011-payments** — bloqueado por gate Wompi (RUT + registro empresarial)
+5. ~~**010-persistence**~~ → ✅ SHIPPED (38 tasks, 342 tests)
+6. **011-factus** — facturación DIAN opcional, sin gates externos
 
 ## Reglas de mantenimiento
 

@@ -185,8 +185,16 @@ Este feature NO tiene implementación en el backend. El API no recibe cambios: r
 
 ### 010-persistence (v1)
 
-- **Planeado:** PostgreSQL con EF Core, migraciones automáticas, datos del usuario (CVs adaptados, scores históricos, exports).
-- **Bloqueado por:** gate Habeas Data (Art. IX) — consentimiento expreso del usuario, derechos ARCO.
+- **Spec:** [specs/010-persistence/spec.md](./010-persistence/spec.md)
+- **Plan:** [specs/010-persistence/plan.md](./010-persistence/plan.md)
+- **Research:** [specs/010-persistence/research.md](./010-persistence/research.md)
+- **Data model:** [specs/010-persistence/data-model.md](./010-persistence/data-model.md)
+- **Quickstart:** [specs/010-persistence/quickstart.md](./010-persistence/quickstart.md)
+- **Tasks:** [specs/010-persistence/tasks.md](./010-persistence/tasks.md)
+- **Contracts:** [specs/010-persistence/contracts/persistence-api.md](./010-persistence/contracts/persistence-api.md)
+- **Status:** Specs completas (7 artifacts), 30 tareas definidas. Fix Art. VI (interface extraction) + PostgreSQL/EF Core. Pendiente de implementación.
+- **Architecture:** IConsentStore + IUserDataStore interfaces in Application, EfConsentStore/EfUserDataStore/EfRefreshTokenStore adapters in Infrastructure, BuildCvDbContext with PostgreSQL
+- **Constitution compliance:** Art. VI ✅ (ports in Application, adapters in Infrastructure), Art. IX ✅ (consent + ARCO persistence for legal compliance)
 
 ### 011-payments (v1)
 

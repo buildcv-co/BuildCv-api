@@ -3,7 +3,7 @@ using BuildCv.Domain.Auth;
 
 namespace BuildCv.Application.Features.Auth;
 
-public sealed class InMemoryConsentStore
+public sealed class InMemoryConsentStore : IConsentStore
 {
     private readonly ConcurrentDictionary<(Guid UserId, string Purpose), ConsentRecord> _active = new();
     private readonly ConcurrentBag<ConsentRecord> _auditTrail = new();
@@ -12,6 +12,12 @@ public sealed class InMemoryConsentStore
     {
         _active[(record.UserId, record.Purpose)] = record;
         _auditTrail.Add(record);
+    }
+
+    public Task AddAsync(ConsentRecord record, CancellationToken ct = default)
+    {
+        Add(record);
+        return Task.CompletedTask;
     }
 
     public void RevokeAll(Guid userId, DateTime revokedAt)
@@ -25,6 +31,12 @@ public sealed class InMemoryConsentStore
                 _auditTrail.Add(revoked);
             }
         }
+    }
+
+    public Task RevokeAllAsync(Guid userId, DateTime revokedAt, CancellationToken ct = default)
+    {
+        RevokeAll(userId, revokedAt);
+        return Task.CompletedTask;
     }
 
     public Task<IReadOnlyList<ConsentRecord>> GetHistoryAsync(Guid userId, CancellationToken ct = default)

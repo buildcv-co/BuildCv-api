@@ -1,6 +1,6 @@
 namespace BuildCv.Application.Features.Auth;
 
-public sealed class HasActiveConsentHandler(InMemoryConsentStore store)
+public sealed class HasActiveConsentHandler(IConsentStore store)
 {
     public async Task<bool> HandleAsync(HasActiveConsentQuery query, CancellationToken ct)
     {

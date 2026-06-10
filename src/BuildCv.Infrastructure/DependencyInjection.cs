@@ -10,10 +10,13 @@ using BuildCv.Infrastructure.Auth;
 using BuildCv.Infrastructure.Lexicon;
 using BuildCv.Infrastructure.Parsing;
 using BuildCv.Infrastructure.Pdf;
+using BuildCv.Infrastructure.Persistence;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BuildCv.Infrastructure;
 
@@ -57,7 +60,6 @@ public static class DependencyInjection
             sp.GetRequiredService<ICvParser>(),
             sp.GetRequiredService<IValidator<ImportCvCommand>>()));
 
-        services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
         services.AddSingleton<JwtTokenAdapter>(sp => new JwtTokenAdapter(
             configuration["Jwt:SigningKey"] ?? "default-dev-signing-key-that-is-long-enough-for-hmac-sha256!",
             configuration["Jwt:Issuer"] ?? "buildcv",
@@ -72,6 +74,31 @@ public static class DependencyInjection
             var linkedinAdapter = sp.GetRequiredService<LinkedInOAuthAdapter>();
             return new CompositeOAuthAdapter(googleAdapter, linkedinAdapter);
         });
+
+        services.Configure<PostgresSettings>(configuration.GetSection(PostgresSettings.SectionName));
+
+        var provider = configuration["Persistence:Provider"] ?? "InMemory";
+
+        if (provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddDbContext<BuildCvDbContext>(options =>
+            {
+                var settings = configuration.GetSection(PostgresSettings.SectionName).Get<PostgresSettings>()
+                    ?? new PostgresSettings();
+                options.UseNpgsql(settings.ConnectionString);
+            });
+            services.AddScoped<IConsentStore, EfConsentStore>();
+            services.AddScoped<IUserDataStore, EfUserDataStore>();
+            services.AddScoped<IRefreshTokenStore, EfRefreshTokenStore>();
+            services.AddSingleton<IUserDataService>(sp => new InMemoryUserDataService(sp.GetRequiredService<IUserDataStore>()));
+        }
+        else
+        {
+            services.AddSingleton<IConsentStore, InMemoryConsentStore>();
+            services.AddSingleton<IUserDataStore, InMemoryUserDataStore>();
+            services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
+            services.AddSingleton<IUserDataService>(sp => new InMemoryUserDataService(sp.GetRequiredService<IUserDataStore>()));
+        }
 
         return services;
     }

@@ -3,7 +3,7 @@ using BuildCv.Domain.Common;
 
 namespace BuildCv.Application.Features.Auth;
 
-public sealed class DeleteUserDataHandler(InMemoryConsentStore consentStore, InMemoryUserDataStore userDataStore)
+public sealed class DeleteUserDataHandler(IConsentStore consentStore, IUserDataStore userDataStore)
 {
     public async Task<Result> HandleAsync(DeleteUserDataCommand command, CancellationToken ct)
     {
@@ -13,10 +13,10 @@ public sealed class DeleteUserDataHandler(InMemoryConsentStore consentStore, InM
             return Result.Failure(new Error("CONSENT/REQUIRED", "Active consent required for data deletion"));
         }
 
-        userDataStore.Delete(command.UserId);
-        consentStore.RevokeAll(command.UserId, DateTime.UtcNow);
+        await userDataStore.DeleteAsync(command.UserId, ct);
+        await consentStore.RevokeAllAsync(command.UserId, DateTime.UtcNow, ct);
 
-        userDataStore.AddLog(new DataTreatmentLog
+        await userDataStore.AddTreatmentLogAsync(new DataTreatmentLog
         {
             Id = Guid.NewGuid(),
             UserId = command.UserId,
@@ -24,7 +24,7 @@ public sealed class DeleteUserDataHandler(InMemoryConsentStore consentStore, InM
             Action = "delete",
             Timestamp = DateTime.UtcNow,
             Reason = "ARCO Cancellation request"
-        });
+        }, ct);
 
         return Result.Success();
     }

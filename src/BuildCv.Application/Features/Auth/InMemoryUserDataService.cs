@@ -6,10 +6,10 @@ namespace BuildCv.Application.Features.Auth;
 
 public sealed class InMemoryUserDataService : IUserDataService
 {
-    private readonly InMemoryUserDataStore _store;
+    private readonly IUserDataStore _store;
     private readonly ConcurrentDictionary<(string Provider, string ProviderId), Guid> _providerKeyMap = new();
 
-    public InMemoryUserDataService(InMemoryUserDataStore store)
+    public InMemoryUserDataService(IUserDataStore store)
     {
         _store = store;
     }

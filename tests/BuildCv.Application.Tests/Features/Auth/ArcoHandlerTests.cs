@@ -155,4 +155,111 @@ public sealed class ArcoHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("CONSENT/REQUIRED");
     }
+
+    [Fact]
+    public async Task GetUserDataHandler_via_interface_returns_user_and_logs()
+    {
+        var userId = Guid.NewGuid();
+        var user = new User
+        {
+            Id = userId,
+            Provider = "google",
+            ProviderId = "g-1",
+            Email = "a@b.com",
+            Name = "Alice",
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow
+        };
+        IConsentStore consent = new InMemoryConsentStore();
+        await consent.AddAsync(new ConsentRecord
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            PolicyVersion = 1,
+            ConsentDate = DateTime.UtcNow,
+            Purpose = "data-access"
+        });
+        IUserDataStore userData = new InMemoryUserDataStore(user);
+        var handler = new GetUserDataHandler(consent, userData);
+
+        var result = await handler.HandleAsync(
+            new GetUserDataQuery(userId), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Email.Should().Be("a@b.com");
+        var logs = await userData.GetTreatmentLogsAsync(userId);
+        logs.Should().Contain(l => l.Action == "access");
+    }
+
+    [Fact]
+    public async Task RectifyUserDataHandler_via_interface_updates_and_logs()
+    {
+        var userId = Guid.NewGuid();
+        var user = new User
+        {
+            Id = userId,
+            Provider = "google",
+            ProviderId = "g-1",
+            Email = "old@b.com",
+            Name = "Old",
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow
+        };
+        IConsentStore consent = new InMemoryConsentStore();
+        await consent.AddAsync(new ConsentRecord
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            PolicyVersion = 1,
+            ConsentDate = DateTime.UtcNow,
+            Purpose = "rectification"
+        });
+        IUserDataStore userData = new InMemoryUserDataStore(user);
+        var handler = new RectifyUserDataHandler(consent, userData);
+
+        var result = await handler.HandleAsync(
+            new RectifyUserDataCommand(userId, "new@b.com", "New"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Email.Should().Be("new@b.com");
+        result.Value.Name.Should().Be("New");
+        var logs = await userData.GetTreatmentLogsAsync(userId);
+        logs.Should().Contain(l => l.Action == "rectify");
+    }
+
+    [Fact]
+    public async Task DeleteUserDataHandler_via_interface_deletes_and_revokes()
+    {
+        var userId = Guid.NewGuid();
+        var user = new User
+        {
+            Id = userId,
+            Provider = "google",
+            ProviderId = "g-1",
+            Email = "a@b.com",
+            Name = "Alice",
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow
+        };
+        IConsentStore consent = new InMemoryConsentStore();
+        await consent.AddAsync(new ConsentRecord
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            PolicyVersion = 1,
+            ConsentDate = DateTime.UtcNow,
+            Purpose = "data-access"
+        });
+        IUserDataStore userData = new InMemoryUserDataStore(user);
+        var handler = new DeleteUserDataHandler(consent, userData);
+
+        var result = await handler.HandleAsync(
+            new DeleteUserDataCommand(userId), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var userAfter = await userData.GetByIdAsync(userId);
+        userAfter.IsFailure.Should().BeTrue();
+        var activeConsent = await consent.GetActiveAsync(userId, "data-access");
+        activeConsent.Should().BeNull();
+    }
 }

@@ -3,7 +3,7 @@ using BuildCv.Domain.Common;
 
 namespace BuildCv.Application.Features.Auth;
 
-public sealed class RectifyUserDataHandler(InMemoryConsentStore consentStore, InMemoryUserDataStore userDataStore)
+public sealed class RectifyUserDataHandler(IConsentStore consentStore, IUserDataStore userDataStore)
 {
     public async Task<Result<User>> HandleAsync(RectifyUserDataCommand command, CancellationToken ct)
     {
@@ -25,9 +25,9 @@ public sealed class RectifyUserDataHandler(InMemoryConsentStore consentStore, In
             Email = command.Email ?? user.Email,
             Name = command.Name ?? user.Name
         };
-        userDataStore.Upsert(updated);
+        await userDataStore.UpsertAsync(updated, ct);
 
-        userDataStore.AddLog(new DataTreatmentLog
+        await userDataStore.AddTreatmentLogAsync(new DataTreatmentLog
         {
             Id = Guid.NewGuid(),
             UserId = command.UserId,
@@ -35,7 +35,7 @@ public sealed class RectifyUserDataHandler(InMemoryConsentStore consentStore, In
             Action = "rectify",
             Timestamp = DateTime.UtcNow,
             Reason = "ARCO Rectification request"
-        });
+        }, ct);
 
         return Result.Success(updated);
     }

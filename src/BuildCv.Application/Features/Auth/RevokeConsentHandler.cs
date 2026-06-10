@@ -3,7 +3,7 @@ using BuildCv.Domain.Common;
 
 namespace BuildCv.Application.Features.Auth;
 
-public sealed class RevokeConsentHandler(InMemoryConsentStore store)
+public sealed class RevokeConsentHandler(IConsentStore store)
 {
     public async Task<Result> HandleAsync(RevokeConsentCommand command, CancellationToken ct)
     {
@@ -14,7 +14,7 @@ public sealed class RevokeConsentHandler(InMemoryConsentStore store)
         }
 
         var revoked = active with { RevokedAt = DateTime.UtcNow };
-        store.Add(revoked);
+        await store.AddAsync(revoked, ct);
         return Result.Success();
     }
 }

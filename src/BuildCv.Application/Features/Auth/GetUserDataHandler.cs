@@ -3,7 +3,7 @@ using BuildCv.Domain.Common;
 
 namespace BuildCv.Application.Features.Auth;
 
-public sealed class GetUserDataHandler(InMemoryConsentStore consentStore, InMemoryUserDataStore userDataStore)
+public sealed class GetUserDataHandler(IConsentStore consentStore, IUserDataStore userDataStore)
 {
     public async Task<Result<User>> HandleAsync(GetUserDataQuery query, CancellationToken ct)
     {
@@ -19,7 +19,7 @@ public sealed class GetUserDataHandler(InMemoryConsentStore consentStore, InMemo
             return userResult;
         }
 
-        userDataStore.AddLog(new DataTreatmentLog
+        await userDataStore.AddTreatmentLogAsync(new DataTreatmentLog
         {
             Id = Guid.NewGuid(),
             UserId = query.UserId,
@@ -27,7 +27,7 @@ public sealed class GetUserDataHandler(InMemoryConsentStore consentStore, InMemo
             Action = "access",
             Timestamp = DateTime.UtcNow,
             Reason = "ARCO Access request"
-        });
+        }, ct);
 
         return userResult;
     }

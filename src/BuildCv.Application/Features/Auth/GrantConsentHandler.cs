@@ -3,7 +3,7 @@ using BuildCv.Domain.Common;
 
 namespace BuildCv.Application.Features.Auth;
 
-public sealed class GrantConsentHandler(InMemoryConsentStore store)
+public sealed class GrantConsentHandler(IConsentStore store)
 {
     public async Task<Result<ConsentRecord>> HandleAsync(GrantConsentCommand command, CancellationToken ct)
     {
@@ -21,7 +21,7 @@ public sealed class GrantConsentHandler(InMemoryConsentStore store)
             ConsentDate = DateTime.UtcNow,
             Purpose = command.Purpose
         };
-        store.Add(record);
+        await store.AddAsync(record, ct);
         return Result.Success(record);
     }
 }

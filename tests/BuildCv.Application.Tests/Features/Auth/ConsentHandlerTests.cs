@@ -150,4 +150,105 @@ public sealed class ConsentHandlerTests
 
         result.Should().HaveCount(2);
     }
+
+    [Fact]
+    public async Task GrantConsentHandler_works_through_IConsentStore_interface()
+    {
+        IConsentStore store = new InMemoryConsentStore();
+        var handler = new GrantConsentHandler(store);
+
+        var result = await handler.HandleAsync(
+            new GrantConsentCommand(Guid.NewGuid(), "scoring", 1), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Purpose.Should().Be("scoring");
+        result.Value.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GrantConsentHandler_via_interface_fails_when_active_consent_exists()
+    {
+        var userId = Guid.NewGuid();
+        IConsentStore store = new InMemoryConsentStore();
+        await store.AddAsync(new ConsentRecord
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            PolicyVersion = 1,
+            ConsentDate = DateTime.UtcNow,
+            Purpose = "scoring"
+        });
+        var handler = new GrantConsentHandler(store);
+
+        var result = await handler.HandleAsync(
+            new GrantConsentCommand(userId, "scoring", 1), CancellationToken.None);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("CONSENT/ALREADY_GRANTED");
+    }
+
+    [Fact]
+    public async Task RevokeConsentHandler_via_interface_revokes()
+    {
+        var userId = Guid.NewGuid();
+        IConsentStore store = new InMemoryConsentStore();
+        await store.AddAsync(new ConsentRecord
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            PolicyVersion = 1,
+            ConsentDate = DateTime.UtcNow,
+            Purpose = "scoring"
+        });
+        var handler = new RevokeConsentHandler(store);
+
+        var result = await handler.HandleAsync(
+            new RevokeConsentCommand(userId, "scoring"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var history = await store.GetHistoryAsync(userId);
+        history.Should().Contain(r => r.Purpose == "scoring" && !r.IsValid);
+    }
+
+    [Fact]
+    public async Task HasActiveConsentHandler_via_interface_returns_true_when_granted()
+    {
+        var userId = Guid.NewGuid();
+        IConsentStore store = new InMemoryConsentStore();
+        await store.AddAsync(new ConsentRecord
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            PolicyVersion = 1,
+            ConsentDate = DateTime.UtcNow,
+            Purpose = "scoring"
+        });
+        var handler = new HasActiveConsentHandler(store);
+
+        var result = await handler.HandleAsync(
+            new HasActiveConsentQuery(userId, "scoring"), CancellationToken.None);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetConsentHistoryHandler_via_interface_returns_records()
+    {
+        var userId = Guid.NewGuid();
+        IConsentStore store = new InMemoryConsentStore();
+        await store.AddAsync(new ConsentRecord
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            PolicyVersion = 1,
+            ConsentDate = DateTime.UtcNow,
+            Purpose = "scoring"
+        });
+        var handler = new GetConsentHistoryHandler(store);
+
+        var result = await handler.HandleAsync(
+            new GetConsentHistoryQuery(userId), CancellationToken.None);
+
+        result.Should().HaveCount(1);
+    }
 }

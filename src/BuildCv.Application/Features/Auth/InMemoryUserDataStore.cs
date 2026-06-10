@@ -4,7 +4,7 @@ using BuildCv.Domain.Common;
 
 namespace BuildCv.Application.Features.Auth;
 
-public sealed class InMemoryUserDataStore
+public sealed class InMemoryUserDataStore : IUserDataStore
 {
     private readonly ConcurrentDictionary<Guid, User> _users = new();
     private readonly ConcurrentBag<DataTreatmentLog> _logs = new();
@@ -19,6 +19,12 @@ public sealed class InMemoryUserDataStore
 
     public void Upsert(User user) => _users[user.Id] = user;
 
+    public Task UpsertAsync(User user, CancellationToken ct = default)
+    {
+        Upsert(user);
+        return Task.CompletedTask;
+    }
+
     public Task<Result<User>> GetByIdAsync(Guid userId, CancellationToken ct = default)
     {
         return _users.TryGetValue(userId, out var user)
@@ -26,9 +32,29 @@ public sealed class InMemoryUserDataStore
             : Task.FromResult(Result.Failure<User>(new Error("ARCO/DATA_NOT_FOUND", "User not found")));
     }
 
+    public Task<Result<User>> GetByProviderAsync(string provider, string providerId, CancellationToken ct = default)
+    {
+        var user = _users.Values.FirstOrDefault(u => u.Provider == provider && u.ProviderId == providerId);
+        return user is not null
+            ? Task.FromResult(Result.Success(user))
+            : Task.FromResult(Result.Failure<User>(new Error("ARCO/DATA_NOT_FOUND", "User not found")));
+    }
+
     public void Delete(Guid userId) => _users.TryRemove(userId, out _);
 
+    public Task DeleteAsync(Guid userId, CancellationToken ct = default)
+    {
+        Delete(userId);
+        return Task.CompletedTask;
+    }
+
     public void AddLog(DataTreatmentLog log) => _logs.Add(log);
+
+    public Task AddTreatmentLogAsync(DataTreatmentLog log, CancellationToken ct = default)
+    {
+        AddLog(log);
+        return Task.CompletedTask;
+    }
 
     public Task<IReadOnlyList<DataTreatmentLog>> GetTreatmentLogsAsync(Guid userId, CancellationToken ct = default)
     {

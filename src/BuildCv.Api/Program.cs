@@ -6,8 +6,10 @@ using BuildCv.Api.Health;
 using BuildCv.Api.Security;
 using BuildCv.Application;
 using BuildCv.Infrastructure;
+using BuildCv.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
@@ -54,6 +56,13 @@ builder.Services.AddHealthChecks()
     .AddCheck<ParserHealthCheck>("parser", tags: ["ready"])
     .AddCheck<AiClientHealthCheck>("ai-client", tags: ["ready"])
     .AddCheck<PdfGeneratorHealthCheck>("pdf-generator", tags: ["ready"]);
+
+var persistenceProvider = builder.Configuration["Persistence:Provider"] ?? "InMemory";
+if (persistenceProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHealthChecks()
+        .AddCheck<PostgresHealthCheck>("postgres", tags: ["ready"]);
+}
 
 // Prometheus metrics + OpenTelemetry tracing.
 builder.Services.AddMetrics();
@@ -108,6 +117,18 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 var app = builder.Build();
+
+if (persistenceProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+{
+    var postgresSettings = builder.Configuration.GetSection(PostgresSettings.SectionName).Get<PostgresSettings>()
+        ?? new PostgresSettings();
+    if (postgresSettings.EnableAutoMigrate)
+    {
+        using var scope = app.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<BuildCvDbContext>();
+        await dbContext.Database.MigrateAsync();
+    }
+}
 
 app.UseForwardedHeaders();
 app.UseSerilogRequestLogging();

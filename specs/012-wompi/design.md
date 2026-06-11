@@ -9,11 +9,13 @@ Widget Checkout Web pattern (same as 011-factus). Backend creates checkout sessi
 | Decision | Choice | Alternatives | Rationale |
 |----------|--------|-------------|-----------|
 | **Checkout flow** | Widget Checkout Web | Direct API, Redirect | Same-origin BFF pattern; widget handles card input in Wompi's PCI-compliant iframe |
-| **Payment truth source** | Webhook + GET /v1/transactions | Browser events only | Constitution Art. IX FR-046/048/049: server-side confirmation mandatory |
+| **Payment truth source** | Webhook + GET /v1/transactions + background reconciliation worker | Browser events only | Constitution Art. IX FR-046/048/049: server-side confirmation mandatory; worker handles webhook delivery failures |
 | **Idempotency** | Unique index on `idempotency_key` + `wompi_transaction_id` | Application-level dedup | Database constraint is bulletproof; application check for UX (return existing session) |
 | **Invoice trigger** | Inline in webhook handler (same DbContext transaction) | MediatR/domain events | Simpler for v1; decouples later if needed |
 | **Feature gating** | `Wompi:Enabled` config bool, checked at endpoint registration | Middleware, attribute | Follows 011-factus pattern; endpoints not mapped when disabled |
 | **HMAC verification** | `System.Security.Cryptography.HMACSHA256` | External library | Zero dependencies in Domain (Art. VI); infrastructure handles crypto |
+| **Reconciliation** | `IHostedService` polling every 60s for Pending > 5min | Manual operator review | Automatic recovery from webhook delivery failures; no human-in-the-loop |
+| **EF update pattern** | `EntityEntry.CurrentValues.SetValues()` with rowversion concurrency | Detach-then-Update | Avoids marking all properties as Modified; optimistic concurrency |
 
 ## Data Flow
 
@@ -39,8 +41,16 @@ Wompi ──POST /api/payments/webhook──> API (no BFF — direct to backend)
   ├─ 1. Verify HMAC SHA256 signature
   ├─ 2. Find payment by wompiTransactionId
   ├─ 3. Update status (idempotent)
-  ├─ 4. If Approved → credit user + create invoice
+  ├─ 4. If Approved → credit user + create invoice via IInvoiceProvider
   └─ 5. Return 200
+
+[Background, every 60s]
+PaymentReconciliationWorker (IHostedService)
+  │
+  ├─ 1. Find all Pending payments > 5 minutes old
+  ├─ 2. For each: call IPaymentProvider.GetTransactionStatusAsync
+  ├─ 3. Update status based on Wompi's response (idempotent)
+  └─ 4. Log reconciliation activity (no payload)
 ```
 
 ## Domain Model

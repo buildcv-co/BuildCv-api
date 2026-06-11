@@ -51,6 +51,17 @@ public sealed class InMemoryPaymentStore : IPaymentStore
         return Task.FromResult<IReadOnlyList<Payment>>(payments);
     }
 
+    public Task<IReadOnlyList<Payment>> ListStalePendingAsync(TimeSpan threshold, CancellationToken ct = default)
+    {
+        var cutoff = DateTime.UtcNow - threshold;
+        var payments = _payments.Values
+            .Where(p => p.Status == PaymentStatus.Pending
+                && p.WompiTransactionId is not null
+                && p.CreatedAt <= cutoff)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<Payment>>(payments);
+    }
+
     public Task UpdateAsync(Payment payment, CancellationToken ct = default)
     {
         _payments[payment.Id] = payment;

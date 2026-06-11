@@ -27,6 +27,11 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.Property(p => p.UpdatedAt).HasColumnName("updated_at");
         builder.Property(p => p.PaidAt).HasColumnName("paid_at");
 
+        builder.Property<uint>("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
+
         builder.HasIndex(p => p.IdempotencyKey)
             .IsUnique()
             .HasDatabaseName("UX_payments_idempotency_key");

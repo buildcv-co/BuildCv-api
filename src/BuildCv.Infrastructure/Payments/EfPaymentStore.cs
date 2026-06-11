@@ -45,16 +45,29 @@ public sealed class EfPaymentStore : IPaymentStore
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<Payment>> ListStalePendingAsync(TimeSpan threshold, CancellationToken ct = default)
+    {
+        var cutoff = DateTime.UtcNow - threshold;
+        return await _db.Payments
+            .Where(p => p.Status == PaymentStatus.Pending
+                && p.WompiTransactionId != null
+                && p.CreatedAt <= cutoff)
+            .ToListAsync(ct);
+    }
+
     public async Task UpdateAsync(Payment payment, CancellationToken ct = default)
     {
-        var existing = _db.ChangeTracker.Entries<Payment>()
+        var entry = _db.ChangeTracker.Entries<Payment>()
             .FirstOrDefault(e => e.Entity.Id == payment.Id);
-        if (existing is not null)
+
+        if (entry is null)
         {
-            existing.State = EntityState.Detached;
+            entry = await _db.Payments.FirstOrDefaultAsync(p => p.Id == payment.Id, ct) is { } tracked
+                ? _db.ChangeTracker.Entries<Payment>().First(e => e.Entity.Id == payment.Id)
+                : throw new InvalidOperationException($"Payment {payment.Id} not found");
         }
 
-        _db.Payments.Update(payment);
+        entry.CurrentValues.SetValues(payment);
         await _db.SaveChangesAsync(ct);
     }
 }

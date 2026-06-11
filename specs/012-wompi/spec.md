@@ -70,21 +70,27 @@ The system MUST verify payment status by calling Wompi's GET /v1/transactions AP
 - WHEN the system polls GET /v1/transactions/{wompiTransactionId}
 - THEN the system updates status based on Wompi's response
 
+#### Scenario: Background reconciliation of stale payments
+
+- GIVEN a payment in `Pending` status for more than 5 minutes
+- WHEN the `PaymentReconciliationWorker` runs (every 60 seconds)
+- THEN the worker calls `IPaymentProvider.GetTransactionStatusAsync` and updates the payment status
+
 ### R5: Invoice Auto-Creation
 
-The system MUST auto-create a Factus invoice when payment status becomes `Approved`. Invoice creation is decoupled via an internal event.
+The system MUST auto-create a Factus invoice when payment status becomes `Approved`. Invoice creation is decoupled via the `IInvoiceProvider` port: `HandleWebhookHandler` (and the background reconciliation service) call `IInvoiceProvider.CreateInvoiceAsync` with payment details on the `Approved` transition. When `Factus:Enabled=false`, the registered `LocalInvoiceProvider` is invoked, which persists a `Draft` invoice locally.
 
 #### Scenario: Payment approved → invoice created
 
 - GIVEN a payment transitions to `Approved`
-- WHEN the internal event fires
-- THEN the system calls IInvoiceProvider.CreateInvoiceAsync with payment details (amount, currency, customer info)
+- WHEN `HandleWebhookHandler` or `PaymentReconciliationService` updates the status
+- THEN the handler calls `IInvoiceProvider.CreateInvoiceAsync` with payment details (amount, currency, customer info from payment)
 
 #### Scenario: Factus disabled → invoice in Draft
 
 - GIVEN Factus is disabled (`Factus:Enabled=false`)
 - WHEN payment is approved
-- THEN the system creates a local Draft invoice without calling Factus
+- THEN the system creates a local Draft invoice via `LocalInvoiceProvider` without calling Factus
 
 ### R6: Environment Gating
 

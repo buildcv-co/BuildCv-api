@@ -102,6 +102,46 @@ public sealed class PaymentsDependencyInjectionTests
         store.Should().BeOfType<EfPaymentStore>();
     }
 
+    [Fact]
+    public void Wompi_enabled_resolves_reconciliation_service_and_worker()
+    {
+        var (services, _) = BuildServices(new Dictionary<string, string?>
+        {
+            ["Persistence:Provider"] = "InMemory",
+            ["Wompi:Enabled"] = "true",
+            ["Wompi:PublicKey"] = "pub_test",
+            ["Wompi:PrivateKey"] = "prv_test",
+            ["Wompi:WebhookSecret"] = "secret",
+        });
+
+        var provider = services.BuildServiceProvider();
+        var reconciliation = provider.GetRequiredService<IPaymentReconciliationService>();
+        var workers = provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>()
+            .OfType<PaymentReconciliationWorker>()
+            .ToList();
+
+        reconciliation.Should().BeOfType<PaymentReconciliationService>();
+        workers.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void Wompi_disabled_does_not_resolve_reconciliation_service_or_worker()
+    {
+        var (services, _) = BuildServices(new Dictionary<string, string?>
+        {
+            ["Persistence:Provider"] = "InMemory",
+            ["Wompi:Enabled"] = "false",
+        });
+
+        var provider = services.BuildServiceProvider();
+        var workers = provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>()
+            .OfType<PaymentReconciliationWorker>()
+            .ToList();
+
+        workers.Should().BeEmpty();
+        provider.GetService<IPaymentReconciliationService>().Should().BeNull();
+    }
+
     private static (IServiceCollection services, IConfiguration configuration) BuildServices(
         Dictionary<string, string?> config)
     {

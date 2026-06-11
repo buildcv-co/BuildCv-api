@@ -1,9 +1,16 @@
+using BuildCv.Application.Features.Invoicing;
 using BuildCv.Domain.Common;
+using BuildCv.Domain.Invoicing;
 using BuildCv.Domain.Payments;
+using Microsoft.Extensions.Logging;
 
 namespace BuildCv.Application.Features.Payments;
 
-public sealed class HandleWebhookHandler(IPaymentStore store, IPaymentProvider provider)
+public sealed class HandleWebhookHandler(
+    IPaymentStore store,
+    IPaymentProvider provider,
+    IInvoiceProvider? invoiceProvider,
+    ILogger<HandleWebhookHandler> logger)
 {
     public async Task<Result<Payment>> HandleAsync(HandleWebhookCommand command, CancellationToken ct)
     {
@@ -58,7 +65,54 @@ public sealed class HandleWebhookHandler(IPaymentStore store, IPaymentProvider p
 
         await store.UpdateAsync(updated, ct);
 
+        if (updated.Status == PaymentStatus.Approved && invoiceProvider is not null)
+        {
+            try
+            {
+                await CreateInvoiceForPaymentAsync(updated, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex,
+                    "Invoice creation failed for payment {PaymentId}; payment remains Approved",
+                    updated.Id);
+            }
+        }
+
         return Result.Success(updated);
+    }
+
+    private async Task CreateInvoiceForPaymentAsync(Payment payment, CancellationToken ct)
+    {
+        var invoice = new Invoice
+        {
+            Id = Guid.NewGuid(),
+            UserId = payment.UserId,
+            DocumentType = InvoiceType.Invoice,
+            ReferenceCode = payment.Id.ToString(),
+            AmountInCents = payment.AmountInCents,
+            Currency = payment.Currency,
+            Status = InvoiceStatus.Draft,
+            CustomerName = "BuildCV Customer",
+            CustomerIdentification = "2222222222",
+            CustomerEmail = "no-reply@buildcv.com",
+            CustomerPhone = "+57 300 000 0000",
+            CustomerAddress = "Digital",
+            CustomerCompany = "BuildCV Customer",
+            CustomerLegalOrganizationCode = "2",
+            CustomerTributeCode = "ZZ",
+            CustomerMunicipalityCode = "11001",
+            CustomerIdentificationDocumentCode = "13",
+            ItemsJson = "[]",
+            ItemsDescription = $"{payment.Credits} BuildCV credits",
+            PaymentDetailsJson = "[]",
+            PaymentMethodCode = "10",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await invoiceProvider!.CreateInvoiceAsync(invoice, ct);
+        logger.LogInformation("Invoice created for payment {PaymentId}", payment.Id);
     }
 
     private static string? ExtractTransactionId(string payload)

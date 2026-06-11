@@ -51,14 +51,14 @@ Chain strategy: feature-branch-chain
 
 ## Phase 3: Infrastructure
 
-- [ ] 3.1 Create `src/BuildCv.Infrastructure/Payments/WompiSettings.cs` — Options class with Enabled, Environment, keys (size: **S**)
-- [ ] 3.2 Create `src/BuildCv.Infrastructure/Payments/WompiAdapter.cs` — HttpClient, CreateCheckout, GetTransactionStatus, VerifyWebhookSignature (size: **L**)
-- [ ] 3.3 Write tests for `WompiAdapter.VerifyWebhookSignature` with known HMAC payloads (size: **M**)
-- [ ] 3.4 Create `src/BuildCv.Infrastructure/Payments/InMemoryPaymentStore.cs` — for testing (size: **S**)
-- [ ] 3.5 Create `src/BuildCv.Infrastructure/Persistence/PaymentConfiguration.cs` — EF Core config, indexes (size: **M**)
-- [ ] 3.6 Create `src/BuildCv.Infrastructure/Payments/EfPaymentStore.cs` — Postgres persistence (size: **M**)
-- [ ] 3.7 Add `DbSet<Payment>` to `BuildCvDbContext` + EF migration (size: **S**)
-- [ ] 3.8 Update `DependencyInjection.cs` — register Wompi services behind `Wompi:Enabled` flag (size: **S**)
+- [x] 3.1 Create `src/BuildCv.Infrastructure/Payments/WompiSettings.cs` — Options class with Enabled, Environment, keys (size: **S**)
+- [x] 3.2 Create `src/BuildCv.Infrastructure/Payments/WompiAdapter.cs` — HttpClient, CreateCheckout, GetTransactionStatus, VerifyWebhookSignature (size: **L**)
+- [x] 3.3 Write tests for `WompiAdapter.VerifyWebhookSignature` with known HMAC payloads (size: **M**)
+- [x] 3.4 Create `src/BuildCv.Infrastructure/Payments/InMemoryPaymentStore.cs` — for testing (size: **S**)
+- [x] 3.5 Create `src/BuildCv.Infrastructure/Persistence/PaymentConfiguration.cs` — EF Core config, indexes (size: **M**)
+- [x] 3.6 Create `src/BuildCv.Infrastructure/Payments/EfPaymentStore.cs` — Postgres persistence (size: **M**)
+- [x] 3.7 Add `DbSet<Payment>` to `BuildCvDbContext` + EF migration (size: **S**)
+- [x] 3.8 Update `DependencyInjection.cs` — register Wompi services behind `Wompi:Enabled` flag (size: **S**)
 
 ## Phase 4: API Endpoints
 
@@ -76,6 +76,29 @@ Chain strategy: feature-branch-chain
 - [x] 6.1 Run `dotnet build BuildCv.slnx -c Release` — 0 warnings (size: **S**)
 - [x] 6.2 Run `dotnet test` — all pass, ≥90% coverage on handlers + WompiAdapter (size: **S**)
 - [x] 6.3 Verify zero suppressions across all new files (size: **S**)
+
+## Phase 7: Verification Follow-ups (from sdd-verify warnings)
+
+### 7.1: Background polling worker for stale payments (R4 closure) [size: **M**]
+- [x] 7.1.1 Create `src/BuildCv.Application/Features/Payments/PaymentReconciliationService.cs` — finds Pending payments > 5 min
+- [x] 7.1.2 Create `src/BuildCv.Infrastructure/Payments/PaymentReconciliationWorker.cs` — `IHostedService` that polls every 60s
+- [x] 7.1.3 Write tests for `PaymentReconciliationService` (finds stale, calls provider, updates status)
+- [x] 7.1.4 Register worker in `DependencyInjection.cs` behind `Wompi:Enabled`
+
+### 7.2: Wire invoice auto-creation on Approved (R5 closure) [size: **M**]
+- [x] 7.2.1 Inject `IInvoiceProvider` into `HandleWebhookHandler` constructor
+- [x] 7.2.2 On status=Approved, call `IInvoiceProvider.CreateInvoiceAsync` with payment details
+- [x] 7.2.3 Update tests to verify invoice creation happens on Approved
+- [x] 7.2.4 Document R5 implementation in spec.md
+
+### 7.3: Refactor `EfPaymentStore.UpdateAsync` [size: **S**]
+- [x] 7.3.1 Replace detach-then-Update with `EntityEntry.CurrentValues.SetValues()`
+- [x] 7.3.2 Verify all existing tests still pass
+- [x] 7.3.3 No new suppressions
+
+### 7.4: Doc fixes [size: **S**]
+- [x] 7.4.1 Mark Phase 3 tasks as complete in tasks.md (corrects doc drift)
+- [x] 7.4.2 Fix checklist math error in PR1 deliverable summary
 
 ## PR3 Deliverables (Shipped)
 

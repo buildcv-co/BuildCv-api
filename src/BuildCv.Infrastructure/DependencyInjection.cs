@@ -128,6 +128,8 @@ public static class DependencyInjection
         if (wompiEnabled)
         {
             services.AddHttpClient<IPaymentProvider, WompiAdapter>();
+            services.AddSingleton<IPaymentReconciliationService, PaymentReconciliationService>();
+            services.AddHostedService<PaymentReconciliationWorker>();
         }
         else
         {

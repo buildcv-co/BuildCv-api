@@ -7,9 +7,13 @@ internal sealed class TestPaymentProvider : IPaymentProvider
 {
     private bool _webhookSignatureValid;
     private string _transactionStatus = "PENDING";
+    private readonly HashSet<string> _throwOnGetTransactionFor = [];
+
+    public List<string> GetTransactionCalls { get; } = [];
 
     public void SetWebhookSignatureValid(bool valid) => _webhookSignatureValid = valid;
     public void SetTransactionStatus(string status) => _transactionStatus = status;
+    public void ThrowOnGetTransactionFor(string wompiTransactionId) => _throwOnGetTransactionFor.Add(wompiTransactionId);
 
     public Task<CheckoutSession> CreateCheckoutAsync(
         string userId,
@@ -32,6 +36,12 @@ internal sealed class TestPaymentProvider : IPaymentProvider
         string wompiTransactionId,
         CancellationToken ct = default)
     {
+        GetTransactionCalls.Add(wompiTransactionId);
+        if (_throwOnGetTransactionFor.Contains(wompiTransactionId))
+        {
+            throw new InvalidOperationException("simulated provider failure");
+        }
+
         var status = new TransactionStatus
         {
             WompiTransactionId = wompiTransactionId,

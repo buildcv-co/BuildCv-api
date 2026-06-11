@@ -62,17 +62,33 @@ Chain strategy: feature-branch-chain
 
 ## Phase 4: API Endpoints
 
-- [ ] 4.1 Create `src/BuildCv.Api/Endpoints/PaymentEndpoints.cs` — 4 Minimal API routes with auth/HMAC guards (size: **M**)
-- [ ] 4.2 Conditionally map endpoints in `Program.cs` behind `Wompi:Enabled` (size: **S**)
+- [x] 4.1 Create `src/BuildCv.Api/Endpoints/PaymentEndpoints.cs` — 4 Minimal API routes with auth/HMAC guards (size: **M**)
+- [x] 4.2 Conditionally map endpoints in `Program.cs` behind `Wompi:Enabled` (size: **S**)
 
 ## Phase 5: Web BFF + Widget
 
-- [ ] 5.1 Create Wompi widget React component (lazy-loaded) in `BuildCv-web/` (size: **M**)
-- [ ] 5.2 Create BFF proxy routes for `/api/payments/*` in `BuildCv-web/app/api/` (size: **M**)
-- [ ] 5.3 Add `Wompi` section to `appsettings.json` / `appsettings.Development.json` (size: **S**)
+- [x] 5.1 Create Wompi widget React component (lazy-loaded) in `BuildCv-web/` (size: **M**)
+- [x] 5.2 Create BFF proxy routes for `/api/payments/*` in `BuildCv-web/app/api/` (size: **M**)
+- [x] 5.3 Add `Wompi` section to `appsettings.json` / `appsettings.Development.json` (size: **S**)
 
 ## Phase 6: Verification
 
-- [ ] 6.1 Run `dotnet build BuildCv.slnx -c Release` — 0 warnings (size: **S**)
-- [ ] 6.2 Run `dotnet test` — all pass, ≥90% coverage on handlers + WompiAdapter (size: **S**)
-- [ ] 6.3 Verify zero suppressions across all new files (size: **S**)
+- [x] 6.1 Run `dotnet build BuildCv.slnx -c Release` — 0 warnings (size: **S**)
+- [x] 6.2 Run `dotnet test` — all pass, ≥90% coverage on handlers + WompiAdapter (size: **S**)
+- [x] 6.3 Verify zero suppressions across all new files (size: **S**)
+
+## PR3 Deliverables (Shipped)
+
+| Files | Count |
+|-------|-------|
+| API Endpoints | 1 (PaymentEndpoints + CheckoutRequest + PaymentResponse) |
+| API Config | 2 (appsettings.json + appsettings.Development.json Wompi section) |
+| API Tests | 2 (14 endpoint tests) |
+| DI registration | 1 (4 payment handlers) |
+| Web BFF | 4 (checkout, webhook, [id], list) |
+| Web Widget | 3 (WompiWidget, LazyWompiWidget, wompi-types) |
+| Web API helper | 2 (payment.ts + payment.test.ts) |
+| Web Widget test | 1 (WompiWidget.test.tsx) |
+| Web Config | 1 (.env.example NEXT_PUBLIC_WOMPI_ENABLED) |
+
+**Verification**: `dotnet build -c Release` ✅ 0 warnings | `dotnet format --verify-no-changes` ✅ | `dotnet test` ✅ 431/431 (14 new PR3 tests) | `pnpm lint` ✅ | `pnpm build` ✅ | `pnpm test` ✅ 718/718 (8 new PR3 tests) | Zero suppressions ✅

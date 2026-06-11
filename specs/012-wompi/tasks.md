@@ -1,0 +1,78 @@
+# Tasks: 012-wompi — Wompi Payment Gateway Integration
+
+## Review Workload Forecast
+
+| Field | Value |
+|-------|-------|
+| Estimated changed lines | ~800 |
+| 400-line budget risk | High |
+| Chained PRs recommended | Yes |
+| Suggested split | PR 1 (Domain+Application) → PR 2 (Infrastructure) → PR 3 (API+Web) |
+| Delivery strategy | ask-on-risk |
+| Chain strategy | feature-branch-chain |
+
+Decision needed before apply: Yes
+Chained PRs recommended: Yes
+Chain strategy: feature-branch-chain
+400-line budget risk: High
+
+### Suggested Work Units
+
+| Unit | Goal | Likely PR | Notes |
+|------|------|-----------|-------|
+| 1 | Domain types + Application ports + Handlers | PR 1 → base: feature/wompi | Foundation; all tests for handlers included |
+| 2 | Infrastructure adapters + DB + DI | PR 2 → base: PR 1 branch | WompiAdapter, EfPaymentStore, InMemoryPaymentStore, migration, config |
+| 3 | API endpoints + Web widget + BFF | PR 3 → base: PR 2 branch | Minimal API routes, frontend component, integration wiring |
+
+## Phase 1: Domain Types
+
+- [x] 1.1 Create `src/BuildCv.Domain/Payments/PaymentStatus.cs` — enum: Pending, Approved, Failed, Error (size: **S**)
+- [x] 1.2 Create `src/BuildCv.Domain/Payments/CreditPackage.cs` — sealed record with static Starter/Standard/Pro catalog (size: **S**)
+- [x] 1.3 Create `src/BuildCv.Domain/Payments/Payment.cs` — sealed record entity (14 props: `ProviderSessionId` added during PR1 for idempotent session replay) (size: **M**)
+
+## Phase 2: Application Ports + Handlers (TDD)
+
+- [x] 2.1 RED: Write failing tests for `CreateCheckoutHandler` — valid checkout, idempotent duplicate, invalid package (size: **M**)
+- [x] 2.2 GREEN: Create `IPaymentProvider.cs`, `IPaymentStore.cs`, `CheckoutSession.cs`, `TransactionStatus.cs`, `CreateCheckoutHandler.cs` — make tests pass (size: **M**)
+- [x] 2.3 RED: Write failing tests for `HandleWebhookHandler` — valid Approved, tampered sig, duplicate idempotent (size: **M**)
+- [x] 2.4 GREEN: Create `HandleWebhookHandler.cs` — HMAC verify, status update (invoice trigger deferred to PR2 infrastructure) (size: **M**)
+- [x] 2.5 RED: Write failing tests for `GetPaymentHandler` + `ListPaymentsHandler` (size: **S**)
+- [x] 2.6 GREEN: Create `GetPaymentHandler.cs` + `ListPaymentsHandler.cs` (size: **S**)
+
+## PR1 Deliverables (Shipped)
+
+| Files | Count |
+|-------|-------|
+| Domain | 3 (PaymentStatus, CreditPackage, Payment) |
+| Application | 8 (2 ports + 4 records + 4 handlers) |
+| Tests | 7 files (14 tests passing) |
+
+**Verification**: `dotnet build -c Release` ✅ 0 warnings | `dotnet format --verify-no-changes` ✅ | `dotnet test --filter Payments` ✅ 14/14
+
+## Phase 3: Infrastructure
+
+- [ ] 3.1 Create `src/BuildCv.Infrastructure/Payments/WompiSettings.cs` — Options class with Enabled, Environment, keys (size: **S**)
+- [ ] 3.2 Create `src/BuildCv.Infrastructure/Payments/WompiAdapter.cs` — HttpClient, CreateCheckout, GetTransactionStatus, VerifyWebhookSignature (size: **L**)
+- [ ] 3.3 Write tests for `WompiAdapter.VerifyWebhookSignature` with known HMAC payloads (size: **M**)
+- [ ] 3.4 Create `src/BuildCv.Infrastructure/Payments/InMemoryPaymentStore.cs` — for testing (size: **S**)
+- [ ] 3.5 Create `src/BuildCv.Infrastructure/Persistence/PaymentConfiguration.cs` — EF Core config, indexes (size: **M**)
+- [ ] 3.6 Create `src/BuildCv.Infrastructure/Payments/EfPaymentStore.cs` — Postgres persistence (size: **M**)
+- [ ] 3.7 Add `DbSet<Payment>` to `BuildCvDbContext` + EF migration (size: **S**)
+- [ ] 3.8 Update `DependencyInjection.cs` — register Wompi services behind `Wompi:Enabled` flag (size: **S**)
+
+## Phase 4: API Endpoints
+
+- [ ] 4.1 Create `src/BuildCv.Api/Endpoints/PaymentEndpoints.cs` — 4 Minimal API routes with auth/HMAC guards (size: **M**)
+- [ ] 4.2 Conditionally map endpoints in `Program.cs` behind `Wompi:Enabled` (size: **S**)
+
+## Phase 5: Web BFF + Widget
+
+- [ ] 5.1 Create Wompi widget React component (lazy-loaded) in `BuildCv-web/` (size: **M**)
+- [ ] 5.2 Create BFF proxy routes for `/api/payments/*` in `BuildCv-web/app/api/` (size: **M**)
+- [ ] 5.3 Add `Wompi` section to `appsettings.json` / `appsettings.Development.json` (size: **S**)
+
+## Phase 6: Verification
+
+- [ ] 6.1 Run `dotnet build BuildCv.slnx -c Release` — 0 warnings (size: **S**)
+- [ ] 6.2 Run `dotnet test` — all pass, ≥90% coverage on handlers + WompiAdapter (size: **S**)
+- [ ] 6.3 Verify zero suppressions across all new files (size: **S**)

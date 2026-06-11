@@ -26,7 +26,9 @@ public sealed class FactusAdapter : IInvoiceProvider, IDisposable
     private async Task EnsureTokenAsync(CancellationToken ct)
     {
         if (_accessToken is not null && DateTime.UtcNow < _tokenExpiresAt)
+        {
             return;
+        }
 
         var response = await _http.PostAsJsonAsync($"{_settings.BaseUrl}/api/v1/auth/access-token", new
         {
@@ -123,7 +125,10 @@ public sealed class FactusAdapter : IInvoiceProvider, IDisposable
     public async Task<Invoice?> GetInvoiceAsync(string number, CancellationToken ct = default)
     {
         var response = await GetAsync<FactusBillResponse>($"/api/v1/bills/{number}", ct);
-        if (response.Data is null) return null;
+        if (response.Data is null)
+        {
+            return null;
+        }
 
         return new Invoice
         {

@@ -3,6 +3,7 @@ using BuildCv.Application.Features.Auth;
 using BuildCv.Application.Features.Consent;
 using BuildCv.Application.Features.Export;
 using BuildCv.Application.Features.Import;
+using BuildCv.Application.Features.Invoicing;
 using BuildCv.Application.Features.Scoring;
 using BuildCv.Domain.Jobs;
 using BuildCv.Domain.Resumes;
@@ -50,6 +51,14 @@ public static class DependencyInjection
         services.AddSingleton<RectifyUserDataHandler>();
         services.AddSingleton<DeleteUserDataHandler>();
         services.AddSingleton<PrivacyPolicyQueryHandler>();
+
+        services.AddSingleton<CreateInvoiceHandler>();
+        services.AddSingleton<GetInvoiceHandler>();
+        services.AddSingleton<ListInvoicesHandler>();
+        services.AddSingleton<CreateCreditNoteHandler>();
+        services.AddSingleton<CreateSupportDocumentHandler>();
+        services.AddSingleton<GetNumberingRangesHandler>();
+        services.AddSingleton<GetCompanyHandler>();
 
         return services;
     }

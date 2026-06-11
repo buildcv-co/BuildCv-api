@@ -59,7 +59,10 @@ public sealed class LocalInvoiceProvider : IInvoiceProvider
     public async Task<byte[]> DownloadPdfAsync(string number, CancellationToken ct = default)
     {
         var invoice = await _invoiceStore.GetByNumberAsync(number, ct);
-        if (invoice is null) throw new InvalidOperationException($"Invoice {number} not found");
+        if (invoice is null)
+        {
+            throw new InvalidOperationException($"Invoice {number} not found");
+        }
 
         // Generate a simple PDF for local invoices
         return GenerateLocalPdf(invoice);
@@ -68,7 +71,10 @@ public sealed class LocalInvoiceProvider : IInvoiceProvider
     public async Task<byte[]> DownloadXmlAsync(string number, CancellationToken ct = default)
     {
         var invoice = await _invoiceStore.GetByNumberAsync(number, ct);
-        if (invoice is null) throw new InvalidOperationException($"Invoice {number} not found");
+        if (invoice is null)
+        {
+            throw new InvalidOperationException($"Invoice {number} not found");
+        }
 
         // Generate a simple XML for local invoices
         return GenerateLocalXml(invoice);

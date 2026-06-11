@@ -24,7 +24,9 @@ public static class InvoicingEndpoints
             };
             var result = await handler.HandleAsync(command, ct);
             if (result.IsFailure)
+            {
                 return Results.BadRequest(new { error = result.Error.Code, result.Error.Message });
+            }
 
             return Results.Created($"/api/v1/invoices/{result.Value.Id}", result.Value);
         })
@@ -38,7 +40,9 @@ public static class InvoicingEndpoints
         {
             var result = await handler.HandleAsync(new GetInvoiceQuery { InvoiceId = id }, ct);
             if (result.IsFailure)
+            {
                 return Results.NotFound(new { error = result.Error.Code, result.Error.Message });
+            }
 
             return Results.Ok(result.Value);
         })
@@ -104,7 +108,9 @@ public static class InvoicingEndpoints
             };
             var result = await handler.HandleAsync(command, ct);
             if (result.IsFailure)
+            {
                 return Results.BadRequest(new { error = result.Error.Code, result.Error.Message });
+            }
 
             return Results.Created($"/api/v1/invoices/{result.Value.Id}", result.Value);
         })
@@ -126,7 +132,9 @@ public static class InvoicingEndpoints
             };
             var result = await handler.HandleAsync(command, ct);
             if (result.IsFailure)
+            {
                 return Results.BadRequest(new { error = result.Error.Code, result.Error.Message });
+            }
 
             return Results.Created($"/api/v1/invoices/{result.Value.Id}", result.Value);
         })

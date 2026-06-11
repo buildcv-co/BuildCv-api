@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using Asp.Versioning;
 using BuildCv.Api.Endpoints;
 using BuildCv.Api.Errors;
@@ -82,6 +83,11 @@ builder.Services.AddCors(options => options.AddPolicy("frontend", policy => poli
 // Composición por capas. El dominio es PURO: sus servicios se registran desde Application.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 var jwtSigningKey = builder.Configuration["Jwt:SigningKey"] ?? "default-dev-signing-key-that-is-long-enough-for-hmac-sha256!";
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "buildcv";

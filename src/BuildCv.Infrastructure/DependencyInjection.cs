@@ -3,6 +3,7 @@ using BuildCv.Application.Features.Auth;
 using BuildCv.Application.Features.Export;
 using BuildCv.Application.Features.Import;
 using BuildCv.Application.Features.Invoicing;
+using BuildCv.Application.Features.Payments;
 using BuildCv.Domain.Adapt;
 using BuildCv.Domain.Export;
 using BuildCv.Domain.Lexicon;
@@ -11,6 +12,7 @@ using BuildCv.Infrastructure.Auth;
 using BuildCv.Infrastructure.Invoicing;
 using BuildCv.Infrastructure.Lexicon;
 using BuildCv.Infrastructure.Parsing;
+using BuildCv.Infrastructure.Payments;
 using BuildCv.Infrastructure.Pdf;
 using BuildCv.Infrastructure.Persistence;
 using FluentValidation;
@@ -92,6 +94,7 @@ public static class DependencyInjection
             services.AddScoped<IConsentStore, EfConsentStore>();
             services.AddScoped<IUserDataStore, EfUserDataStore>();
             services.AddScoped<IRefreshTokenStore, EfRefreshTokenStore>();
+            services.AddScoped<IPaymentStore, EfPaymentStore>();
             services.AddSingleton<IUserDataService>(sp => new InMemoryUserDataService(sp.GetRequiredService<IUserDataStore>()));
         }
         else
@@ -99,6 +102,7 @@ public static class DependencyInjection
             services.AddSingleton<IConsentStore, InMemoryConsentStore>();
             services.AddSingleton<IUserDataStore, InMemoryUserDataStore>();
             services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
+            services.AddSingleton<IPaymentStore, InMemoryPaymentStore>();
             services.AddSingleton<IUserDataService>(sp => new InMemoryUserDataService(sp.GetRequiredService<IUserDataStore>()));
         }
 
@@ -115,6 +119,19 @@ public static class DependencyInjection
         else
         {
             services.AddSingleton<IInvoiceProvider, LocalInvoiceProvider>();
+        }
+
+        // Payment services (012-wompi PR2)
+        services.Configure<WompiSettings>(configuration.GetSection(WompiSettings.SectionName));
+
+        var wompiEnabled = configuration.GetValue<bool>(WompiSettings.SectionName + ":Enabled");
+        if (wompiEnabled)
+        {
+            services.AddHttpClient<IPaymentProvider, WompiAdapter>();
+        }
+        else
+        {
+            services.AddSingleton<IPaymentProvider, DisabledPaymentProvider>();
         }
 
         return services;

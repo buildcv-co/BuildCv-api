@@ -1,5 +1,6 @@
 using BuildCv.Domain.Auth;
 using BuildCv.Domain.Invoicing;
+using BuildCv.Domain.Payments;
 using Microsoft.EntityFrameworkCore;
 
 namespace BuildCv.Infrastructure.Persistence;
@@ -17,6 +18,8 @@ public sealed class BuildCvDbContext(DbContextOptions<BuildCvDbContext> options)
     public DbSet<Invoice> Invoices => Set<Invoice>();
 
     public DbSet<NumberingRange> NumberingRanges => Set<NumberingRange>();
+
+    public DbSet<Payment> Payments => Set<Payment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

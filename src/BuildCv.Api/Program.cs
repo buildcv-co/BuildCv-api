@@ -163,6 +163,11 @@ app.MapUserDataEndpoints();
 app.MapPrivacyEndpoints();
 app.MapInvoicingEndpoints();
 
+if (builder.Configuration.GetValue<bool>("Wompi:Enabled"))
+{
+    app.MapPaymentEndpoints();
+}
+
 app.Run();
 
 // Expuesto para WebApplicationFactory<Program> en las pruebas de integración.

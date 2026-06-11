@@ -4,6 +4,7 @@ using BuildCv.Application.Features.Consent;
 using BuildCv.Application.Features.Export;
 using BuildCv.Application.Features.Import;
 using BuildCv.Application.Features.Invoicing;
+using BuildCv.Application.Features.Payments;
 using BuildCv.Application.Features.Scoring;
 using BuildCv.Domain.Jobs;
 using BuildCv.Domain.Resumes;
@@ -59,6 +60,11 @@ public static class DependencyInjection
         services.AddSingleton<CreateSupportDocumentHandler>();
         services.AddSingleton<GetNumberingRangesHandler>();
         services.AddSingleton<GetCompanyHandler>();
+
+        services.AddSingleton<CreateCheckoutHandler>();
+        services.AddSingleton<HandleWebhookHandler>();
+        services.AddSingleton<GetPaymentHandler>();
+        services.AddSingleton<ListPaymentsHandler>();
 
         return services;
     }

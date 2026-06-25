@@ -128,15 +128,9 @@ public static class DependencyInjection
         services.AddSingleton<INumberingRangeStore, InMemoryNumberingRangeStore>();
         services.AddSingleton<IInvoiceStore, InMemoryInvoiceStore>();
 
-        var factusEnabled = configuration.GetValue<bool>("Factus:Enabled");
-        if (factusEnabled)
-        {
-            services.AddHttpClient<IInvoiceProvider, FactusAdapter>();
-        }
-        else
-        {
-            services.AddSingleton<IInvoiceProvider, LocalInvoiceProvider>();
-        }
+        services.AddHttpClient<FactusAdapter>();
+        services.AddSingleton<LocalInvoiceProvider>();
+        services.AddSingleton<IInvoiceProvider, FeatureFlagInvoiceAdapter>();
 
         // Payment services (012-wompi PR2)
         services.Configure<WompiSettings>(configuration.GetSection(WompiSettings.SectionName));
@@ -153,16 +147,14 @@ public static class DependencyInjection
         services.AddSingleton<GetCreditHistoryHandler>();
         services.AddSingleton<GrantManualCreditHandler>();
 
-        var wompiEnabled = configuration.GetValue<bool>(WompiSettings.SectionName + ":Enabled");
-        if (wompiEnabled)
+        services.AddHttpClient<WompiAdapter>();
+        services.AddSingleton<DisabledPaymentProvider>();
+        services.AddSingleton<IPaymentProvider, FeatureFlagPaymentAdapter>();
+
+        if (configuration.GetValue<bool>(WompiSettings.SectionName + ":Enabled"))
         {
-            services.AddHttpClient<IPaymentProvider, WompiAdapter>();
             services.AddSingleton<IPaymentReconciliationService, PaymentReconciliationService>();
             services.AddHostedService<PaymentReconciliationWorker>();
-        }
-        else
-        {
-            services.AddSingleton<IPaymentProvider, DisabledPaymentProvider>();
         }
 
         services.Configure<FeatureFlagsOptions>(configuration.GetSection("FeatureFlags"));

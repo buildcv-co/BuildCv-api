@@ -1,37 +1,57 @@
 using BuildCv.Application.Common;
-using BuildCv.Application.Features.Invoicing;
 using BuildCv.Application.Features.Payments;
 using BuildCv.Domain.FeatureFlags;
+using BuildCv.Domain.Invoicing;
 using BuildCv.Domain.Payments;
 using BuildCv.Infrastructure.Credits;
 using BuildCv.Infrastructure.Invoicing;
 using BuildCv.Infrastructure.Payments;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace BuildCv.Infrastructure.Tests.FeatureFlags;
 
 public sealed class BackwardCompatAdaptersTests
 {
     [Fact]
-    public async Task FeatureFlagInvoiceAdapter_uses_local_provider_when_flag_disabled()
+    public async Task FeatureFlagInvoiceAdapter_delegates_to_LocalInvoiceProvider_when_flag_disabled()
     {
         var flags = new StubFeatureFlag(["factus-enabled"], isEnabled: false);
-        var inner = new ThrowingInvoiceAdapter();
-        var adapter = new FeatureFlagInvoiceAdapter(flags, inner, NullLogger<FeatureFlagInvoiceAdapter>.Instance);
+        var invoiceStore = new InMemoryInvoiceStore();
+        var numberingStore = new InMemoryNumberingRangeStore();
+        var localProvider = new LocalInvoiceProvider(invoiceStore, numberingStore, NullLogger<LocalInvoiceProvider>.Instance);
+        var factusAdapter = CreateFactusAdapter();
+        var adapter = new FeatureFlagInvoiceAdapter(flags, factusAdapter, localProvider);
 
-        var act = async () => await adapter.GetInvoiceAsync("BUILDCV-1");
+        var invoice = new Invoice
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            ReferenceCode = "REF-DISABLED",
+            AmountInCents = 150000,
+            Currency = "COP",
+            Status = InvoiceStatus.Draft,
+            CustomerName = "Test User",
+            CustomerIdentification = "1234567890",
+            CustomerEmail = "test@example.com",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*local*");
+        var result = await adapter.CreateInvoiceAsync(invoice);
+
+        result.Number.Should().StartWith("BUILDCV-");
+        result.Status.Should().Be(InvoiceStatus.Draft);
     }
 
     [Fact]
-    public async Task FeatureFlagPaymentAdapter_returns_disabled_when_flag_disabled()
+    public async Task FeatureFlagPaymentAdapter_delegates_to_DisabledPaymentProvider_when_flag_disabled()
     {
         var flags = new StubFeatureFlag(["wompi-enabled"], isEnabled: false);
-        var inner = new ThrowingPaymentProvider();
-        var adapter = new FeatureFlagPaymentAdapter(flags, inner, NullLogger<FeatureFlagPaymentAdapter>.Instance);
+        var disabledProvider = new DisabledPaymentProvider(NullLogger<DisabledPaymentProvider>.Instance);
+        var wompiAdapter = CreateWompiAdapter();
+        var adapter = new FeatureFlagPaymentAdapter(flags, wompiAdapter, disabledProvider);
 
         var act = async () => await adapter.CreateCheckoutAsync(
             "user-1",
@@ -60,6 +80,33 @@ public sealed class BackwardCompatAdaptersTests
         adapter.IsEnabled.Should().BeFalse();
     }
 
+    private static FactusAdapter CreateFactusAdapter()
+    {
+        var settings = new FactusSettings
+        {
+            Enabled = true,
+            BaseUrl = "https://factus.local",
+            ClientId = "test",
+            ClientSecret = "test",
+            Email = "test@example.com",
+            Password = "test"
+        };
+        return new FactusAdapter(new HttpClient(), Options.Create(settings), NullLogger<FactusAdapter>.Instance);
+    }
+
+    private static WompiAdapter CreateWompiAdapter()
+    {
+        var settings = new WompiSettings
+        {
+            Enabled = true,
+            Environment = "sandbox",
+            PublicKey = "pub_test",
+            PrivateKey = "prv_test",
+            WebhookSecret = "secret"
+        };
+        return new WompiAdapter(new HttpClient(), Options.Create(settings), NullLogger<WompiAdapter>.Instance);
+    }
+
     private sealed class StubFeatureFlag : IFeatureFlag
     {
         private readonly HashSet<string> _enabledNames;
@@ -79,64 +126,5 @@ public sealed class BackwardCompatAdaptersTests
 
         public Task<IReadOnlyList<FeatureFlag>> ListAsync(CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<FeatureFlag>>([]);
-    }
-
-    private sealed class ThrowingInvoiceAdapter : IInvoiceProvider
-    {
-        public Task<BuildCv.Domain.Invoicing.Invoice> CreateInvoiceAsync(
-            BuildCv.Domain.Invoicing.Invoice invoice, CancellationToken ct = default)
-            => throw new InvalidOperationException("FactusAdapter should not be called when flag is disabled");
-
-        public Task<BuildCv.Domain.Invoicing.Invoice?> GetInvoiceAsync(string number, CancellationToken ct = default)
-            => throw new InvalidOperationException("local fallback should have been used");
-
-        public Task<IReadOnlyList<BuildCv.Domain.Invoicing.Invoice>> ListInvoicesAsync(
-            int page = 1, int perPage = 20, CancellationToken ct = default)
-            => throw new InvalidOperationException("local fallback should have been used");
-
-        public Task DeleteInvoiceAsync(string referenceCode, CancellationToken ct = default)
-            => throw new InvalidOperationException("local fallback should have been used");
-
-        public Task<byte[]> DownloadPdfAsync(string number, CancellationToken ct = default)
-            => throw new InvalidOperationException("local fallback should have been used");
-
-        public Task<byte[]> DownloadXmlAsync(string number, CancellationToken ct = default)
-            => throw new InvalidOperationException("local fallback should have been used");
-
-        public Task<BuildCv.Domain.Invoicing.Invoice> CreateCreditNoteAsync(
-            BuildCv.Domain.Invoicing.Invoice invoice, CancellationToken ct = default)
-            => throw new InvalidOperationException("local fallback should have been used");
-
-        public Task<BuildCv.Domain.Invoicing.Invoice> CreateSupportDocumentAsync(
-            BuildCv.Domain.Invoicing.Invoice invoice, CancellationToken ct = default)
-            => throw new InvalidOperationException("local fallback should have been used");
-
-        public Task<IReadOnlyList<BuildCv.Domain.Invoicing.NumberingRange>> GetNumberingRangesAsync(
-            CancellationToken ct = default)
-            => throw new InvalidOperationException("local fallback should have been used");
-
-        public Task<BuildCv.Domain.Invoicing.NumberingRange> CreateNumberingRangeAsync(
-            BuildCv.Domain.Invoicing.NumberingRange range, CancellationToken ct = default)
-            => throw new InvalidOperationException("local fallback should have been used");
-
-        public Task<BuildCv.Domain.Invoicing.CompanyInfo> GetCompanyAsync(CancellationToken ct = default)
-            => throw new InvalidOperationException("local fallback should have been used");
-
-        public Task<BuildCv.Domain.Invoicing.CompanyInfo> UpdateCompanyAsync(
-            BuildCv.Domain.Invoicing.CompanyInfo company, CancellationToken ct = default)
-            => throw new InvalidOperationException("local fallback should have been used");
-    }
-
-    private sealed class ThrowingPaymentProvider : IPaymentProvider
-    {
-        public Task<CheckoutSession> CreateCheckoutAsync(
-            string userId, CreditPackage package, string idempotencyKey, CancellationToken ct = default)
-            => throw new InvalidOperationException("WompiAdapter should not be called when flag is disabled");
-
-        public Task<TransactionStatus?> GetTransactionStatusAsync(
-            string wompiTransactionId, CancellationToken ct = default)
-            => throw new InvalidOperationException("WompiAdapter should not be called when flag is disabled");
-
-        public bool VerifyWebhookSignature(string payload, string signatureHeader) => false;
     }
 }

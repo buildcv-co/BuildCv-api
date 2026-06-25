@@ -26,7 +26,7 @@ public sealed class PaymentsDependencyInjectionTests
     }
 
     [Fact]
-    public void Wompi_disabled_resolves_DisabledPaymentProvider()
+    public void Wompi_disabled_resolves_FeatureFlagPaymentAdapter_and_concrete_DisabledPaymentProvider()
     {
         var (services, _) = BuildServices(new Dictionary<string, string?>
         {
@@ -36,12 +36,14 @@ public sealed class PaymentsDependencyInjectionTests
 
         var provider = services.BuildServiceProvider();
         var paymentProvider = provider.GetRequiredService<IPaymentProvider>();
+        var disabledProvider = provider.GetRequiredService<DisabledPaymentProvider>();
 
-        paymentProvider.Should().BeOfType<DisabledPaymentProvider>();
+        paymentProvider.Should().BeOfType<FeatureFlagPaymentAdapter>();
+        disabledProvider.Should().NotBeNull();
     }
 
     [Fact]
-    public void Wompi_enabled_resolves_WompiAdapter()
+    public void Wompi_enabled_resolves_FeatureFlagPaymentAdapter_and_concrete_WompiAdapter()
     {
         var (services, _) = BuildServices(new Dictionary<string, string?>
         {
@@ -54,8 +56,10 @@ public sealed class PaymentsDependencyInjectionTests
 
         var provider = services.BuildServiceProvider();
         var paymentProvider = provider.GetRequiredService<IPaymentProvider>();
+        var wompiAdapter = provider.GetRequiredService<WompiAdapter>();
 
-        paymentProvider.Should().BeOfType<WompiAdapter>();
+        paymentProvider.Should().BeOfType<FeatureFlagPaymentAdapter>();
+        wompiAdapter.Should().NotBeNull();
     }
 
     [Fact]

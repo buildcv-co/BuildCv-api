@@ -71,6 +71,10 @@ public static class DependencyInjection
             configuration["Jwt:SigningKey"] ?? "default-dev-signing-key-that-is-long-enough-for-hmac-sha256!",
             configuration["Jwt:Issuer"] ?? "buildcv",
             configuration["Jwt:Audience"] ?? "buildcv"));
+        services.AddSingleton<NextAuthJwtValidator>(_ => new NextAuthJwtValidator(
+            configuration["NextAuth:SigningKey"] ?? configuration["Jwt:SigningKey"] ?? "default-dev-signing-key-that-is-long-enough-for-hmac-sha256!",
+            configuration["NextAuth:Issuer"] ?? configuration["Jwt:Issuer"] ?? "buildcv",
+            configuration["NextAuth:Audience"] ?? configuration["Jwt:Audience"] ?? "buildcv"));
         services.AddSingleton<GoogleOAuthAdapter>(sp =>
             new GoogleOAuthAdapter(new HttpClient(), configuration["Google:ClientId"] ?? "", configuration["Google:ClientSecret"] ?? ""));
         services.AddSingleton<LinkedInOAuthAdapter>(sp =>

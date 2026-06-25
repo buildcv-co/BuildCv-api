@@ -158,6 +158,7 @@ app.MapScoringEndpoints();
 app.MapAdaptEndpoints();
 app.MapExportEndpoints();
 app.MapImportEndpoints();
+app.MapSessionEndpoint();
 app.MapAuthEndpoints();
 app.MapUserDataEndpoints();
 app.MapPrivacyEndpoints();

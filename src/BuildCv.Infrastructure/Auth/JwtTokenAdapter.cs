@@ -51,6 +51,26 @@ public sealed class JwtTokenAdapter
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    public string GenerateAccessToken(Guid userId, string email, string name)
+    {
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, email),
+            new Claim(JwtRegisteredClaimNames.Name, name),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: _issuer,
+            audience: _audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(15),
+            signingCredentials: _signingCredentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
     public string GenerateRefreshToken()
     {
         var randomBytes = new byte[64];

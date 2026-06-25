@@ -15,10 +15,12 @@ public sealed class IterateAdaptationHandler(
     EntityExtractor extractor,
     IIterationStore store,
     ICreditLedger ledger,
-    ILogger<IterateAdaptationHandler> logger)
+    ILogger<IterateAdaptationHandler> logger,
+    TimeSpan? perIterationTimeout = null,
+    TimeSpan? totalTimeout = null)
 {
-    private static readonly TimeSpan PerIterationTimeout = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan TotalTimeout = TimeSpan.FromMinutes(5);
+    private readonly TimeSpan _perIterationTimeout = perIterationTimeout ?? TimeSpan.FromSeconds(30);
+    private readonly TimeSpan _totalTimeout = totalTimeout ?? TimeSpan.FromMinutes(5);
 
     public async Task<IterationResult> HandleAsync(
         Guid userId,
@@ -54,7 +56,7 @@ public sealed class IterateAdaptationHandler(
 
         for (var i = 1; i <= iterationCount; i++)
         {
-            if (DateTime.UtcNow - startTime > TotalTimeout)
+            if (DateTime.UtcNow - startTime > _totalTimeout)
             {
                 timedOut = true;
                 break;
@@ -66,9 +68,9 @@ public sealed class IterateAdaptationHandler(
             try
             {
                 using var iterCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                iterCts.CancelAfter(PerIterationTimeout);
+                iterCts.CancelAfter(_perIterationTimeout);
 
-                var adaptCmd = new AdaptCvCommand(request.CvText, request.VacancyText);
+                var adaptCmd = new AdaptCvCommand(request.CvText, request.VacancyText, Seed: $"{request.RequestId}:{i}");
                 var adaptOutcome = await adaptHandler.Handle(adaptCmd, iterCts.Token);
 
                 if (adaptOutcome.IsFailure)
@@ -127,13 +129,13 @@ public sealed class IterateAdaptationHandler(
                     Timestamp = stepStart,
                     Duration = DateTime.UtcNow - stepStart,
                 });
-                logger.LogWarning(
-                    "Iteration timed out (requestId={RequestId}, iteration={I}, perIterationTimeoutSec={TimeoutSec})",
-                    request.RequestId, i, PerIterationTimeout.TotalSeconds);
+logger.LogWarning(
+                        "Iteration timed out (requestId={RequestId}, iteration={I}, perIterationTimeoutSec={TimeoutSec})",
+                        request.RequestId, i, _perIterationTimeout.TotalSeconds);
             }
         }
 
-        var finalTimedOut = timedOut || (DateTime.UtcNow - startTime) > TotalTimeout;
+        var finalTimedOut = timedOut || (DateTime.UtcNow - startTime) > _totalTimeout;
         var status = bestStep is null
             ? RequestStatus.Failed
             : finalTimedOut ? RequestStatus.TimedOut : RequestStatus.Completed;
@@ -152,6 +154,7 @@ public sealed class IterateAdaptationHandler(
             AllSteps = allSteps,
             ProbabilityWarning = warning,
             CreditsConsumed = iterationCount,
+            Partial = finalTimedOut && bestStep is not null,
             CompletedAt = DateTime.UtcNow,
         };
 

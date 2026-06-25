@@ -178,6 +178,7 @@ app.MapInvoicingEndpoints();
 app.MapCreditEndpoints();
 app.MapFeatureFlagAdminEndpoints();
 app.MapSubscriptionEndpoints();
+app.MapIterationEndpoints();
 
 if (builder.Configuration.GetValue<bool>("Wompi:Enabled"))
 {

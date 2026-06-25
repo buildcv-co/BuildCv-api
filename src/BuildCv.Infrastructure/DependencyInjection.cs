@@ -5,7 +5,9 @@ using BuildCv.Application.Features.Credits;
 using BuildCv.Application.Features.Export;
 using BuildCv.Application.Features.Import;
 using BuildCv.Application.Features.Invoicing;
+using BuildCv.Application.Features.Iterations;
 using BuildCv.Application.Features.Payments;
+using BuildCv.Application.Features.Scoring;
 using BuildCv.Application.Features.Subscriptions;
 using BuildCv.Domain.Adapt;
 using BuildCv.Domain.Export;
@@ -15,6 +17,7 @@ using BuildCv.Infrastructure.Auth;
 using BuildCv.Infrastructure.Credits;
 using BuildCv.Infrastructure.FeatureFlags;
 using BuildCv.Infrastructure.Invoicing;
+using BuildCv.Infrastructure.Iterations;
 using BuildCv.Infrastructure.Lexicon;
 using BuildCv.Infrastructure.Parsing;
 using BuildCv.Infrastructure.Payments;
@@ -112,6 +115,8 @@ public static class DependencyInjection
             services.AddScoped<IFeatureFlag, CachingFeatureFlagDecorator>();
             services.AddScoped<IFeatureFlagAdminService, FeatureFlagAdminService>();
             services.AddScoped<ISubscriptionStore, EfSubscriptionStore>();
+            services.AddScoped<IIterationStore, EfIterationStore>();
+            services.AddSingleton<IIterationCleanupCapable>(sp => (EfIterationStore)sp.GetRequiredService<IIterationStore>());
         }
         else
         {
@@ -125,6 +130,8 @@ public static class DependencyInjection
             services.AddSingleton<IFeatureFlagStore, InMemoryFeatureFlagStore>();
             services.AddSingleton<IFeatureFlag, CachingFeatureFlagDecorator>();
             services.AddSingleton<ISubscriptionStore, InMemorySubscriptionStore>();
+            services.AddSingleton<IIterationStore, InMemoryIterationStore>();
+            services.AddSingleton<IIterationCleanupCapable>(sp => (InMemoryIterationStore)sp.GetRequiredService<IIterationStore>());
         }
 
         // Invoicing services
@@ -177,6 +184,19 @@ public static class DependencyInjection
             sp.GetRequiredService<ProcessRetriesHandler>().HandleAsync(ct);
         services.AddSingleton(retryTick);
         services.AddHostedService<SubscriptionReconciliationWorker>();
+
+        // Iteration services (018-cv-iteration-loop PR2)
+        services.AddSingleton<IterateAdaptationHandler>(sp => new IterateAdaptationHandler(
+            sp.GetRequiredService<AdaptCvHandler>(),
+            sp.GetRequiredService<ScoreCvHandler>(),
+            sp.GetRequiredService<CrossEntityValidator>(),
+            sp.GetRequiredService<EntityExtractor>(),
+            sp.GetRequiredService<IIterationStore>(),
+            sp.GetRequiredService<ICreditLedger>(),
+            sp.GetRequiredService<ILogger<IterateAdaptationHandler>>()));
+        services.AddSingleton<GetIterationResultHandler>();
+        services.AddSingleton<IIterationService, IterationService>();
+        services.AddHostedService<IterationCleanupWorker>();
 
         return services;
     }

@@ -109,6 +109,8 @@ public static class DependencyInjection
             services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
             services.AddSingleton<IPaymentStore, InMemoryPaymentStore>();
             services.AddSingleton<IUserDataService>(sp => new InMemoryUserDataService(sp.GetRequiredService<IUserDataStore>()));
+            services.AddSingleton<ICreditLedger, InMemoryCreditLedger>();
+            services.AddSingleton<ICreditConsumptionService, InMemoryCreditConsumptionService>();
         }
 
         // Invoicing services
@@ -132,6 +134,14 @@ public static class DependencyInjection
         // Credit services (013-credit-consumption PR2)
         services.Configure<CreditsOptions>(configuration.GetSection(CreditsOptions.SectionName));
         services.AddSingleton<ICreditsFeatureFlag, CreditsFeatureFlag>();
+
+        services.AddSingleton<AccreditPurchaseHandler>();
+        services.AddSingleton<AccreditWelcomeHandler>();
+        services.AddSingleton<ConsumeForAdaptHandler>();
+        services.AddSingleton<RefundConsumptionHandler>();
+        services.AddSingleton<GetCreditBalanceHandler>();
+        services.AddSingleton<GetCreditHistoryHandler>();
+        services.AddSingleton<GrantManualCreditHandler>();
 
         var wompiEnabled = configuration.GetValue<bool>(WompiSettings.SectionName + ":Enabled");
         if (wompiEnabled)

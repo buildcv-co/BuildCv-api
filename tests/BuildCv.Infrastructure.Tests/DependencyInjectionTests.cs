@@ -3,6 +3,7 @@ using BuildCv.Application.Features.Auth;
 using BuildCv.Application.Features.Credits;
 using BuildCv.Infrastructure.Auth;
 using BuildCv.Infrastructure.Credits;
+using BuildCv.Infrastructure.FeatureFlags;
 using BuildCv.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -280,15 +281,17 @@ public sealed class DependencyInjectionTests
             {
                 ["Persistence:Provider"] = "InMemory",
                 ["Credits:Enabled"] = "true",
+                ["FeatureFlags:Defaults:credits-enabled"] = "true"
             })
             .Build();
 
+        services.AddLogging();
         services.AddInfrastructure(configuration);
 
         var provider = services.BuildServiceProvider();
         var flag = provider.GetRequiredService<ICreditsFeatureFlag>();
 
-        flag.Should().BeOfType<CreditsFeatureFlag>();
+        flag.Should().BeOfType<FeatureFlagCreditsAdapter>();
         flag.IsEnabled.Should().BeTrue();
     }
 }

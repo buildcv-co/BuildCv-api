@@ -12,6 +12,7 @@ using BuildCv.Domain.Lexicon;
 using BuildCv.Infrastructure.Ai;
 using BuildCv.Infrastructure.Auth;
 using BuildCv.Infrastructure.Credits;
+using BuildCv.Infrastructure.FeatureFlags;
 using BuildCv.Infrastructure.Invoicing;
 using BuildCv.Infrastructure.Lexicon;
 using BuildCv.Infrastructure.Parsing;
@@ -105,6 +106,9 @@ public static class DependencyInjection
             services.AddSingleton<IUserDataService>(sp => new InMemoryUserDataService(sp.GetRequiredService<IUserDataStore>()));
             services.AddScoped<ICreditLedger, EfCreditLedger>();
             services.AddScoped<ICreditConsumptionService, EfCreditConsumptionService>();
+            services.AddScoped<IFeatureFlagStore, EfFeatureFlagStore>();
+            services.AddScoped<IFeatureFlag, CachingFeatureFlagDecorator>();
+            services.AddScoped<IFeatureFlagAdminService, FeatureFlagAdminService>();
         }
         else
         {
@@ -115,6 +119,8 @@ public static class DependencyInjection
             services.AddSingleton<IUserDataService>(sp => new InMemoryUserDataService(sp.GetRequiredService<IUserDataStore>()));
             services.AddSingleton<ICreditLedger, InMemoryCreditLedger>();
             services.AddSingleton<ICreditConsumptionService, InMemoryCreditConsumptionService>();
+            services.AddSingleton<IFeatureFlagStore, InMemoryFeatureFlagStore>();
+            services.AddSingleton<IFeatureFlag, CachingFeatureFlagDecorator>();
         }
 
         // Invoicing services
@@ -137,7 +143,7 @@ public static class DependencyInjection
 
         // Credit services (013-credit-consumption PR2)
         services.Configure<CreditsOptions>(configuration.GetSection(CreditsOptions.SectionName));
-        services.AddSingleton<ICreditsFeatureFlag, CreditsFeatureFlag>();
+        services.AddSingleton<ICreditsFeatureFlag, FeatureFlagCreditsAdapter>();
 
         services.AddSingleton<AccreditPurchaseHandler>();
         services.AddSingleton<AccreditWelcomeHandler>();
@@ -158,6 +164,9 @@ public static class DependencyInjection
         {
             services.AddSingleton<IPaymentProvider, DisabledPaymentProvider>();
         }
+
+        services.Configure<FeatureFlagsOptions>(configuration.GetSection("FeatureFlags"));
+        services.AddHostedService<FeatureFlagMigrationService>();
 
         return services;
     }

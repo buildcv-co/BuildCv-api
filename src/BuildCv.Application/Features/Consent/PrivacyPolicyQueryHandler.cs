@@ -57,6 +57,50 @@ public sealed class PrivacyPolicyQueryHandler
                 "Credit balance tracking and audit",
                 "Payment processing and Colombian tax compliance (DIAN)",
                 "CV scoring and readability analysis"
+            ]),
+        new(
+            Version: 3,
+            Content: """
+                BuildCV Privacy Policy v3 — Effective 2026-06-25
+
+                Section 1: Data We Store (unchanged from v1)
+                We do not store your CV or job description content. Scoring and adaptation operate on data that lives only in your browser session.
+
+                Section 2: Account Data (unchanged from v2)
+                When you sign in via Google or LinkedIn, we store your email, display name, and OAuth provider ID. You can request deletion at any time (Habeas Data / ARCO right).
+
+                Section 3: Credit Balance (unchanged from v2)
+                We store your current credit balance in our database. Each credit represents one CV adaptation. Credit grants and consumption are recorded in an append-only audit ledger. Your credit balance is never shared with third parties.
+
+                Section 4: Payments and Invoices (unchanged from v2)
+                When you purchase credits, the payment is processed by Wompi. For Colombian tax compliance (DIAN), electronic invoices are issued and retained for the legally required period, even if you later exercise your ARCO right. In that case, your user record is anonymized, but the invoice and its associated payment remain.
+
+                Section 5: Subscriptions (NEW v3)
+                If you have an active credit subscription, we store the subscription status, period dates (start, end, next charge), retry count, and the Wompi payment source ID (a tokenized reference, NOT the actual card). Your card details are tokenized Wompi-side and never touch our servers. The recurring charge is processed server-to-server by Wompi; we only receive the webhook confirmation. When you cancel a subscription, the cancellation is non-refundable for the current period: you keep access until the period end, but you are not charged again, and we do not issue partial refunds. When you exercise your ARCO right (delete account), any active subscription is pre-canceled at Wompi before your user record is anonymized, and the subscription row is cascade-deleted from our database.
+
+                Section 6: ARCO Rights (unchanged from v2)
+                You have the right to Access, Rectify, Cancel, and Oppose (ARCO) your personal data. Submit a request via the dashboard.
+
+                Section 7: No Tracking (unchanged from v1)
+                We do not use cookies, third-party analytics, fingerprinting, or behavioral tracking.
+                """,
+            EffectiveDate: new DateTime(2026, 6, 25, 0, 0, 0, DateTimeKind.Utc),
+            DataCategories:
+            [
+                "Profile (name, email, OAuth provider ID)",
+                "Credit balance (integer)",
+                "Credit ledger entries (append-only audit log)",
+                "Payment records (Wompi webhook metadata)",
+                "Electronic invoices (DIAN legal hold)",
+                "Subscription record (status, period dates, retry count, Wompi payment source ID token — never raw card data)"
+            ],
+            Purposes:
+            [
+                "Account authentication and identification",
+                "Credit balance tracking and audit",
+                "Payment processing and Colombian tax compliance (DIAN)",
+                "Recurring credit subscription billing (Wompi payment source)",
+                "CV scoring and readability analysis"
             ])
     ];
 

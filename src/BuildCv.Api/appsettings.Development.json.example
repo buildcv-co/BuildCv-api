@@ -6,15 +6,28 @@
     }
   },
   "Cors": {
-    "AllowedOrigins": [ "http://localhost:3000" ]
+    "AllowedOrigins": ["http://localhost:3000"]
   },
   "Persistence": {
     "Provider": "InMemory"
   },
+
+  "_comment": "=================================================================",
+  "_ai_provider_setup": "Choose ONE of: 'Stub' (no key, default), 'Anthropic' (Claude), 'Minimax'",
+  "_ai_provider": "Set Ai:Provider below. NEVER commit your real ApiKey here.",
+  "_api_key_methods": "See docs/ai-configuration.md for 3 secure methods: env var, dotnet user-secrets, or copy this file to appsettings.Development.json (which is .gitignored) and paste your key.",
+  "_minimax_reference": "https://platform.minimax.io/docs/api-reference/api-overview",
+  "_anthropic_reference": "https://docs.anthropic.com/",
+  "_comment": "=================================================================",
+
   "Ai": {
     "Provider": "Stub",
-    "ApiKey": ""
+    "ApiKey": "",
+    "BaseUrl": "",
+    "Model": "claude-sonnet-4-20250514",
+    "MaxTokens": 4096
   },
+
   "Wompi": {
     "Enabled": false,
     "Environment": "sandbox",
@@ -22,15 +35,19 @@
     "PrivateKey": "prv_test_localOnly_mockKey",
     "WebhookSecret": "test_localOnly_webhookSecret"
   },
+
   "Factus": {
     "Enabled": false
   },
+
   "Credits": {
     "Enabled": true
   },
+
   "SubscriptionRecurring": {
     "Enabled": true
   },
+
   "FeatureFlags": {
     "CacheTtlSeconds": 60,
     "Defaults": {
@@ -40,6 +57,7 @@
       "subscription-recurring-enabled": true
     }
   },
+
   "LocalAuth": {
     "Enabled": true,
     "UserId": "00000000-0000-0000-0000-000000000001",
@@ -47,8 +65,9 @@
     "Name": "Local User",
     "InitialCredits": 1000
   },
+
   "NextAuth": {
-    "SigningKey": "local-dev-secret-min-32-chars-for-testing-only",
+    "SigningKey": "REPLACE_WITH_NEXTAUTH_SECRET_MIN_32_CHARS_LOCAL_DEV_ONLY",
     "Issuer": "buildcv-web",
     "Audience": "buildcv-api"
   }

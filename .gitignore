@@ -10,11 +10,20 @@ coverage/
 *.trx
 *.binlog
 
-# Secretos / configuración local
+# ---------- Secretos / API keys (NEVER commit) ----------
+# Local config files with API keys
+appsettings.Development.json
 appsettings.*.local.json
+appsettings.*.Production.json
+appsettings.Local.json
+appsettings.Staging.json
+secrets.json
 .env
 .env.*
 !.env.example
+# User-secrets (per-developer, NOT in repo)
+secrets/
+*.user secrets
 
 # ---------- Sistema ----------
 .DS_Store

@@ -232,7 +232,11 @@ public static class DependencyInjection
 
         if (provider.Equals("Minimax", StringComparison.OrdinalIgnoreCase))
         {
-            var baseUrl = configuration["Ai:BaseUrl"] ?? "https://api.MiniMax.chat";
+            var baseUrl = configuration["Ai:BaseUrl"];
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                baseUrl = "https://api.MiniMax.chat";
+            }
             services.AddHttpClient<MinimaxAiClient>(MinimaxAiClient.HttpClientName, client =>
             {
                 client.BaseAddress = new Uri(baseUrl);

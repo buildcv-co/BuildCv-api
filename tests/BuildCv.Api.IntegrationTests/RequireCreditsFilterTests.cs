@@ -185,6 +185,15 @@ public sealed class RequireCreditsFilterTests : IDisposable
 
 public sealed class CreditsTestFactory : WebApplicationFactory<Program>
 {
+    static CreditsTestFactory()
+    {
+        // Environment variables override appsettings.*.json in the standard ASP.NET
+        // Core configuration order, so this is the most reliable way to keep these
+        // tests self-contained — they don't depend on the developer's local
+        // appsettings.Development.json (gitignored, may carry Anthropic/Minimax).
+        Environment.SetEnvironmentVariable("Ai__Provider", "Stub");
+    }
+
     protected override IHost CreateHost(IHostBuilder builder)
     {
         builder.ConfigureHostConfiguration(config =>

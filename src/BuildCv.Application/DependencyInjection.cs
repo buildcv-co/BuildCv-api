@@ -2,6 +2,7 @@ using BuildCv.Application.Features.Adapt;
 using BuildCv.Application.Features.Auth;
 using BuildCv.Application.Features.Consent;
 using BuildCv.Application.Features.Export;
+using BuildCv.Application.Features.FeatureFlags;
 using BuildCv.Application.Features.Import;
 using BuildCv.Application.Features.Invoicing;
 using BuildCv.Application.Features.Payments;
@@ -65,6 +66,11 @@ public static class DependencyInjection
         services.AddSingleton<HandleWebhookHandler>();
         services.AddSingleton<GetPaymentHandler>();
         services.AddSingleton<ListPaymentsHandler>();
+
+        services.AddSingleton<GetFeatureFlagHandler>();
+        services.AddSingleton<ListFeatureFlagsHandler>();
+        services.AddSingleton<UpdateFeatureFlagHandler>();
+        services.AddSingleton<GetFeatureFlagAuditLogHandler>();
 
         return services;
     }

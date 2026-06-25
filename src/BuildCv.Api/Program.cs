@@ -1,12 +1,15 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using Asp.Versioning;
+using BuildCv.Api.Auth;
 using BuildCv.Api.Endpoints;
 using BuildCv.Api.Errors;
 using BuildCv.Api.Health;
 using BuildCv.Api.Security;
 using BuildCv.Application;
+using BuildCv.Application.Common;
 using BuildCv.Infrastructure;
+using BuildCv.Infrastructure.FeatureFlags;
 using BuildCv.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -109,9 +112,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+builder.Services.AddAuthPolicies();
 
 // Anti-abuso por IP (rate limiting nativo).
 builder.Services.AddAppRateLimiting();
+
+builder.Services.AddSingleton<IFeatureFlagCache>(sp => new FeatureFlagCacheInvalidator(
+    (CachingFeatureFlagDecorator)sp.GetRequiredService<IFeatureFlag>()));
+
+if (!persistenceProvider.Equals("Postgres", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<IFeatureFlagAdminService, InMemoryFeatureFlagAdminService>();
+}
 
 // Detrás de un proxy inverso (Render/Vercel): recuperar la IP real del cliente,
 // indispensable para el rate limiting por IP que se añade en M1.
@@ -164,6 +176,7 @@ app.MapUserDataEndpoints();
 app.MapPrivacyEndpoints();
 app.MapInvoicingEndpoints();
 app.MapCreditEndpoints();
+app.MapFeatureFlagAdminEndpoints();
 
 if (builder.Configuration.GetValue<bool>("Wompi:Enabled"))
 {

@@ -11,6 +11,7 @@ public static class RateLimiting
     public const string ImportPolicy = "import";
     public const string AuthPolicy = "auth";
     public const string ConsentPolicy = "consent";
+    public const string AdminPolicy = "admin";
 
     public static IServiceCollection AddAppRateLimiting(this IServiceCollection services)
     {
@@ -74,6 +75,16 @@ public static class RateLimiting
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = 10,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                    }));
+
+            options.AddPolicy(AdminPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: ClientKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 30,
                         Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0,
                     }));

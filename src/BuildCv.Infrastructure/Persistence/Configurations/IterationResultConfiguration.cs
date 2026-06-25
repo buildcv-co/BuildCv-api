@@ -39,6 +39,7 @@ internal sealed class IterationResultConfiguration : IEntityTypeConfiguration<It
                 v => JsonSerializer.Deserialize<List<IterationStep>>(v, JsonOpts) ?? new List<IterationStep>());
 
         builder.Property(r => r.ProbabilityWarning).HasColumnName("probability_warning");
+        builder.Property(r => r.Partial).HasColumnName("partial").HasDefaultValue(false);
         builder.Property(r => r.CreditsConsumed).HasColumnName("credits_consumed");
         builder.Property(r => r.CompletedAt).HasColumnName("completed_at");
         builder.Property(r => r.ExpiresAt).HasColumnName("expires_at");

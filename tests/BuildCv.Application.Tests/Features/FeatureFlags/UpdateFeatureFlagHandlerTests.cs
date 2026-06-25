@@ -20,7 +20,8 @@ public sealed class UpdateFeatureFlagHandlerTests
             UpdatedAt = DateTime.UtcNow,
             UpdatedBy = Guid.NewGuid()
         };
-        var handler = new UpdateFeatureFlagHandler(admin);
+        var cache = new FakeCache();
+        var handler = new UpdateFeatureFlagHandler(admin, cache);
 
         var result = await handler.HandleAsync("wompi-enabled", newValue: false, Guid.NewGuid(), "incident P1-273");
 
@@ -29,10 +30,40 @@ public sealed class UpdateFeatureFlagHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_invalidates_cache_after_successful_update()
+    {
+        var admin = new FakeAdminService();
+        var cache = new FakeCache();
+        var handler = new UpdateFeatureFlagHandler(admin, cache);
+
+        await handler.HandleAsync("wompi-enabled", newValue: false, Guid.NewGuid(), "incident P1-273");
+
+        cache.Invalidated.Should().Contain("wompi-enabled");
+    }
+
+    [Fact]
+    public async Task HandleAsync_does_not_invalidate_cache_when_admin_service_throws()
+    {
+        var admin = new FakeAdminService
+        {
+            ThrowOnUpdate = new FeatureFlagNotFoundException("wompi-enabled")
+        };
+        var cache = new FakeCache();
+        var handler = new UpdateFeatureFlagHandler(admin, cache);
+
+        var act = () => handler.HandleAsync("wompi-enabled", newValue: true, Guid.NewGuid(), null);
+
+        await act.Should().ThrowAsync<FeatureFlagNotFoundException>();
+        cache.Invalidated.Should().BeEmpty(
+            "cache must NOT be invalidated when the update fails — otherwise the cache advertises a value that was never persisted");
+    }
+
+    [Fact]
     public async Task HandleAsync_passes_all_args_unchanged_to_admin_service()
     {
         var admin = new FakeAdminService();
-        var handler = new UpdateFeatureFlagHandler(admin);
+        var cache = new FakeCache();
+        var handler = new UpdateFeatureFlagHandler(admin, cache);
         var changedBy = Guid.NewGuid();
 
         await handler.HandleAsync("credits-enabled", newValue: true, changedBy, "production rollout");
@@ -50,7 +81,8 @@ public sealed class UpdateFeatureFlagHandlerTests
         {
             ThrowOnUpdate = new FeatureFlagNotFoundException("reports-v2-enabled")
         };
-        var handler = new UpdateFeatureFlagHandler(admin);
+        var cache = new FakeCache();
+        var handler = new UpdateFeatureFlagHandler(admin, cache);
 
         var act = () => handler.HandleAsync("reports-v2-enabled", newValue: true, Guid.NewGuid(), null);
 
@@ -66,7 +98,8 @@ public sealed class UpdateFeatureFlagHandlerTests
         {
             ThrowOnUpdate = concurrencyException
         };
-        var handler = new UpdateFeatureFlagHandler(admin);
+        var cache = new FakeCache();
+        var handler = new UpdateFeatureFlagHandler(admin, cache);
 
         var act = () => handler.HandleAsync("wompi-enabled", newValue: false, Guid.NewGuid(), "concurrent flip");
 
@@ -77,7 +110,8 @@ public sealed class UpdateFeatureFlagHandlerTests
     public async Task HandleAsync_propagates_cancellation()
     {
         var admin = new FakeAdminService();
-        var handler = new UpdateFeatureFlagHandler(admin);
+        var cache = new FakeCache();
+        var handler = new UpdateFeatureFlagHandler(admin, cache);
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
@@ -114,4 +148,11 @@ internal sealed class FakeAdminService : IFeatureFlagAdminService
 
         return Task.FromResult(NextResult ?? FeatureFlag.Create(name, newValue));
     }
+}
+
+internal sealed class FakeCache : IFeatureFlagCache
+{
+    public List<string> Invalidated { get; } = [];
+
+    public void Invalidate(string name) => Invalidated.Add(name);
 }

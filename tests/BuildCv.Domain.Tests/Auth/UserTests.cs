@@ -6,6 +6,54 @@ namespace BuildCv.Domain.Tests.Auth;
 public sealed class UserTests
 {
     [Fact]
+    public void CreditBalance_defaults_to_zero()
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Provider = "google",
+            ProviderId = "g-1",
+            Email = "a@b.com",
+            Name = "Alice",
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow
+        };
+
+        user.CreditBalance.Should().Be(0);
+    }
+
+    [Fact]
+    public void CreditBalance_can_be_set_via_with_expression()
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Provider = "google",
+            ProviderId = "g-1",
+            Email = "a@b.com",
+            Name = "Alice",
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow
+        };
+
+        var updated = user with { CreditBalance = 5 };
+
+        updated.CreditBalance.Should().Be(5);
+        user.CreditBalance.Should().Be(0);
+    }
+
+    [Fact]
+    public void CreditBalance_uses_init_only_setter_so_reassignment_via_with_yields_new_instance()
+    {
+        var user = new User { CreditBalance = 7 };
+        var updated = user with { CreditBalance = 9 };
+
+        user.Should().NotBeSameAs(updated);
+        user.CreditBalance.Should().Be(7);
+        updated.CreditBalance.Should().Be(9);
+    }
+
+    [Fact]
     public void User_initializes_with_all_properties()
     {
         var now = DateTime.UtcNow;

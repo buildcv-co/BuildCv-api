@@ -90,13 +90,13 @@ The system MUST return the authenticated user's ledger history, newest first, pa
 - WHEN A calls `GET /api/v1/credits/history?userId=B`
 - THEN the system returns A's history only (no cross-user access)
 
-### R5: Credit balance (with last update)
-The system MUST expose `GET /api/v1/credits/balance` returning `{ balance: int, lastUpdatedAt: DateTime }` for the authenticated user. (Art. IV — honest framing)
+### R5: Credit balance (with recent consumption)
+The system MUST expose `GET /api/v1/credits/balance` returning `{ balance: int, recentConsumption: int }` for the authenticated user. `recentConsumption` is the count of `Consumption` ledger entries created in the last 7 days (rolling window, UTC). (Art. IV — honest framing)
 
 #### Scenario: Balance reflects current state
-- GIVEN a user with `credit_balance = 7`
+- GIVEN a user with `credit_balance = 7` and 3 `Consumption` entries in the last 7 days
 - WHEN `GET /api/v1/credits/balance` is called
-- THEN the response is `{ balance: 7, lastUpdatedAt: <recent UTC> }`
+- THEN the response is `{ balance: 7, recentConsumption: 3 }`
 
 ### R6: Welcome grant on signup (3 credits, idempotent)
 The system MUST post a 3-credit `Gift` entry on first OAuth signup with idempotency key `welcome:{userId}`. Replays return no-op success. (Art. IV — encuadre honesto: "3 adaptaciones gratis")
@@ -167,7 +167,7 @@ The system MUST add one line to the existing `GET /api/v1/privacy-policy` respon
 
 | Method | Path | Auth | Returns |
 |---|---|---|---|
-| `GET` | `/api/v1/credits/balance` | JWT | `{ balance, lastUpdatedAt }` |
+| `GET` | `/api/v1/credits/balance` | JWT | `{ balance, recentConsumption }` |
 | `GET` | `/api/v1/credits/history?page&perPage` | JWT | `{ items: [...], hasMore: bool, page, perPage }` |
 | `GET` | `/api/v1/credits/health` | JWT + Admin | `{ sumDelta, usersBalance, drift }` |
 | `POST` | `/api/v1/credits/gift` | JWT + Admin | `{ ledgerEntryId, newBalance }` |

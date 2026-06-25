@@ -19,6 +19,8 @@ internal sealed class IterationHandlerHarness
     public TestCreditLedger Ledger { get; } = new();
     public ScriptedAiClient Ai { get; } = new();
     public ScriptedScoringEngine Scoring { get; } = new();
+    public TimeSpan? PerIterationTimeoutOverride { get; set; }
+    public TimeSpan? TotalTimeoutOverride { get; set; }
 
     public IterateAdaptationHandler BuildHandler()
     {
@@ -36,16 +38,21 @@ internal sealed class IterationHandlerHarness
             extractor,
             Store,
             Ledger,
-            NullLogger<IterateAdaptationHandler>.Instance);
+            NullLogger<IterateAdaptationHandler>.Instance,
+            perIterationTimeout: PerIterationTimeoutOverride,
+            totalTimeout: TotalTimeoutOverride);
     }
 }
 
 internal sealed class ScriptedAiClient : IAiClient
 {
     private readonly Queue<string> _responses = new();
+    private readonly HashSet<int> _throwOnCallIndices = new();
 
     public IReadOnlyList<string> Calls => _calls;
     private readonly List<string> _calls = new();
+
+    public TimeSpan PerCallDelay { get; set; } = TimeSpan.Zero;
 
     public void Enqueue(string adaptedCv) => _responses.Enqueue(adaptedCv);
     public void EnqueueMany(params string[] adaptedCvs)
@@ -56,14 +63,31 @@ internal sealed class ScriptedAiClient : IAiClient
         }
     }
 
-    public Task<string> CompleteAsync(string prompt, CancellationToken ct)
+    public void ThrowCancellationOnCall(int zeroBasedIndex)
     {
+        _throwOnCallIndices.Add(zeroBasedIndex);
+    }
+
+    public async Task<string> CompleteAsync(string prompt, CancellationToken ct)
+    {
+        var callIndex = _calls.Count;
         _calls.Add(prompt);
+
+        if (PerCallDelay > TimeSpan.Zero)
+        {
+            await Task.Delay(PerCallDelay, ct);
+        }
+
+        if (_throwOnCallIndices.Contains(callIndex))
+        {
+            throw new OperationCanceledException("simulated per-iteration timeout");
+        }
+
         if (_responses.Count == 0)
         {
-            return Task.FromResult("Adapted CV (default)");
+            return "Adapted CV (default)";
         }
-        return Task.FromResult(_responses.Dequeue());
+        return _responses.Dequeue();
     }
 }
 

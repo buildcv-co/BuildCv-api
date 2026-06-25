@@ -2,4 +2,5 @@ namespace BuildCv.Application.Features.Adapt;
 
 public sealed record AdaptCvCommand(
     string CvText,
-    string JobText);
+    string JobText,
+    string? Seed = null);

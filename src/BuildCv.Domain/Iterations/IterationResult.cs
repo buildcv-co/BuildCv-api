@@ -8,6 +8,7 @@ public sealed record IterationResult
     public IReadOnlyList<IterationStep> AllSteps { get; init; } = Array.Empty<IterationStep>();
     public string? ProbabilityWarning { get; init; }
     public int CreditsConsumed { get; init; }
+    public bool Partial { get; init; }
     public DateTime CompletedAt { get; init; } = DateTime.UtcNow;
     public DateTime ExpiresAt { get; init; } = DateTime.UtcNow.AddDays(1);
 }

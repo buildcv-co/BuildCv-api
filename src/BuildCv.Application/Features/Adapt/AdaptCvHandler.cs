@@ -47,7 +47,7 @@ public sealed class AdaptCvHandler
         string adaptedCv;
         try
         {
-            var prompt = _promptBuilder.Build(command.CvText, command.JobText);
+            var prompt = _promptBuilder.Build(command.CvText, command.JobText, command.Seed);
             adaptedCv = await _aiClient.CompleteAsync(prompt, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

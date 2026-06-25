@@ -23,6 +23,7 @@ public sealed record IterationResultDto(
     IReadOnlyList<IterationStepDto> AllSteps,
     string? ProbabilityWarning,
     int CreditsConsumed,
+    bool Partial,
     DateTime CompletedAt);
 
 public static class IterationResultMapper
@@ -34,6 +35,7 @@ public static class IterationResultMapper
         AllSteps: result.AllSteps.Select(MapStep).ToList(),
         ProbabilityWarning: result.ProbabilityWarning,
         CreditsConsumed: result.CreditsConsumed,
+        Partial: result.Partial,
         CompletedAt: result.CompletedAt);
 
     private static IterationStepDto MapStep(IterationStep s) => new(

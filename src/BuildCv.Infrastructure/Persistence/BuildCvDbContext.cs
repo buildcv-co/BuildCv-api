@@ -2,6 +2,7 @@ using BuildCv.Domain.Auth;
 using BuildCv.Domain.Credits;
 using BuildCv.Domain.FeatureFlags;
 using BuildCv.Domain.Invoicing;
+using BuildCv.Domain.Iterations;
 using BuildCv.Domain.Payments;
 using BuildCv.Domain.Subscriptions;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,10 @@ public sealed class BuildCvDbContext(DbContextOptions<BuildCvDbContext> options)
     public DbSet<FeatureFlagAuditLog> FeatureFlagAuditLogs => Set<FeatureFlagAuditLog>();
 
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
+
+    public DbSet<IterationRequest> IterationRequests => Set<IterationRequest>();
+
+    public DbSet<IterationResult> IterationResults => Set<IterationResult>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,5 +1,8 @@
+using BuildCv.Application.Common;
 using BuildCv.Application.Features.Auth;
+using BuildCv.Application.Features.Credits;
 using BuildCv.Infrastructure.Auth;
+using BuildCv.Infrastructure.Credits;
 using BuildCv.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -218,5 +221,74 @@ public sealed class DependencyInjectionTests
 
         settings.ConnectionString.Should().Be("Host=localhost;Database=buildcv_test");
         settings.EnableAutoMigrate.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Postgres_provider_resolves_EfCreditLedger()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Persistence:Provider"] = "Postgres",
+                ["Postgres:ConnectionString"] = "Host=localhost;Database=buildcv_test",
+            })
+            .Build();
+
+        services.AddLogging();
+        services.AddDbContext<BuildCvDbContext>(options =>
+            options.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+        services.AddInfrastructure(configuration);
+
+        var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var ledger = scope.ServiceProvider.GetRequiredService<ICreditLedger>();
+
+        ledger.Should().BeOfType<EfCreditLedger>();
+    }
+
+    [Fact]
+    public void Postgres_provider_resolves_EfCreditConsumptionService()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Persistence:Provider"] = "Postgres",
+                ["Postgres:ConnectionString"] = "Host=localhost;Database=buildcv_test",
+            })
+            .Build();
+
+        services.AddLogging();
+        services.AddDbContext<BuildCvDbContext>(options =>
+            options.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+        services.AddInfrastructure(configuration);
+
+        var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ICreditConsumptionService>();
+
+        service.Should().BeOfType<EfCreditConsumptionService>();
+    }
+
+    [Fact]
+    public void Always_resolves_ICreditsFeatureFlag_as_singleton()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Persistence:Provider"] = "InMemory",
+                ["Credits:Enabled"] = "true",
+            })
+            .Build();
+
+        services.AddInfrastructure(configuration);
+
+        var provider = services.BuildServiceProvider();
+        var flag = provider.GetRequiredService<ICreditsFeatureFlag>();
+
+        flag.Should().BeOfType<CreditsFeatureFlag>();
+        flag.IsEnabled.Should().BeTrue();
     }
 }

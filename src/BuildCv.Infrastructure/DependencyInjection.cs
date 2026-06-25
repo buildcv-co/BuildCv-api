@@ -1,5 +1,7 @@
+using BuildCv.Application.Common;
 using BuildCv.Application.Features.Adapt;
 using BuildCv.Application.Features.Auth;
+using BuildCv.Application.Features.Credits;
 using BuildCv.Application.Features.Export;
 using BuildCv.Application.Features.Import;
 using BuildCv.Application.Features.Invoicing;
@@ -9,6 +11,7 @@ using BuildCv.Domain.Export;
 using BuildCv.Domain.Lexicon;
 using BuildCv.Infrastructure.Ai;
 using BuildCv.Infrastructure.Auth;
+using BuildCv.Infrastructure.Credits;
 using BuildCv.Infrastructure.Invoicing;
 using BuildCv.Infrastructure.Lexicon;
 using BuildCv.Infrastructure.Parsing;
@@ -96,6 +99,8 @@ public static class DependencyInjection
             services.AddScoped<IRefreshTokenStore, EfRefreshTokenStore>();
             services.AddScoped<IPaymentStore, EfPaymentStore>();
             services.AddSingleton<IUserDataService>(sp => new InMemoryUserDataService(sp.GetRequiredService<IUserDataStore>()));
+            services.AddScoped<ICreditLedger, EfCreditLedger>();
+            services.AddScoped<ICreditConsumptionService, EfCreditConsumptionService>();
         }
         else
         {
@@ -123,6 +128,10 @@ public static class DependencyInjection
 
         // Payment services (012-wompi PR2)
         services.Configure<WompiSettings>(configuration.GetSection(WompiSettings.SectionName));
+
+        // Credit services (013-credit-consumption PR2)
+        services.Configure<CreditsOptions>(configuration.GetSection(CreditsOptions.SectionName));
+        services.AddSingleton<ICreditsFeatureFlag, CreditsFeatureFlag>();
 
         var wompiEnabled = configuration.GetValue<bool>(WompiSettings.SectionName + ":Enabled");
         if (wompiEnabled)

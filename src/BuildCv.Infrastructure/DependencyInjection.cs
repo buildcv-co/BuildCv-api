@@ -6,6 +6,7 @@ using BuildCv.Application.Features.Export;
 using BuildCv.Application.Features.Import;
 using BuildCv.Application.Features.Invoicing;
 using BuildCv.Application.Features.Payments;
+using BuildCv.Application.Features.Subscriptions;
 using BuildCv.Domain.Adapt;
 using BuildCv.Domain.Export;
 using BuildCv.Domain.Lexicon;
@@ -19,6 +20,7 @@ using BuildCv.Infrastructure.Parsing;
 using BuildCv.Infrastructure.Payments;
 using BuildCv.Infrastructure.Pdf;
 using BuildCv.Infrastructure.Persistence;
+using BuildCv.Infrastructure.Subscriptions;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -109,6 +111,7 @@ public static class DependencyInjection
             services.AddScoped<IFeatureFlagStore, EfFeatureFlagStore>();
             services.AddScoped<IFeatureFlag, CachingFeatureFlagDecorator>();
             services.AddScoped<IFeatureFlagAdminService, FeatureFlagAdminService>();
+            services.AddScoped<ISubscriptionStore, EfSubscriptionStore>();
         }
         else
         {
@@ -121,6 +124,7 @@ public static class DependencyInjection
             services.AddSingleton<ICreditConsumptionService, InMemoryCreditConsumptionService>();
             services.AddSingleton<IFeatureFlagStore, InMemoryFeatureFlagStore>();
             services.AddSingleton<IFeatureFlag, CachingFeatureFlagDecorator>();
+            services.AddSingleton<ISubscriptionStore, InMemorySubscriptionStore>();
         }
 
         // Invoicing services
@@ -159,6 +163,17 @@ public static class DependencyInjection
 
         services.Configure<FeatureFlagsOptions>(configuration.GetSection("FeatureFlags"));
         services.AddHostedService<FeatureFlagMigrationService>();
+
+        // Subscription services (016-subscription-recurring PR2)
+        services.AddSingleton<ISubscriptionFeatureFlag, SubscriptionFeatureFlag>();
+        services.AddSingleton<HandleRecurringChargeHandler>();
+        services.AddSingleton<ProcessRetriesHandler>();
+        services.AddHttpClient<ISubscriptionProvider, WompiRecurringAdapter>();
+        services.AddSingleton<DisabledSubscriptionProvider>();
+        Func<IServiceProvider, CancellationToken, Task> retryTick = (sp, ct) =>
+            sp.GetRequiredService<ProcessRetriesHandler>().HandleAsync(ct);
+        services.AddSingleton(retryTick);
+        services.AddHostedService<SubscriptionReconciliationWorker>();
 
         return services;
     }

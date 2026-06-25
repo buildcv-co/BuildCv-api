@@ -166,6 +166,9 @@ public static class DependencyInjection
 
         // Subscription services (016-subscription-recurring PR2)
         services.AddSingleton<ISubscriptionFeatureFlag, SubscriptionFeatureFlag>();
+        services.AddSingleton<SubscribeHandler>();
+        services.AddSingleton<CancelSubscriptionHandler>();
+        services.AddSingleton<GetSubscriptionHandler>();
         services.AddSingleton<HandleRecurringChargeHandler>();
         services.AddSingleton<ProcessRetriesHandler>();
         services.AddHttpClient<ISubscriptionProvider, WompiRecurringAdapter>();

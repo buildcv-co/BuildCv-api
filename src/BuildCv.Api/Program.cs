@@ -177,6 +177,7 @@ app.MapPrivacyEndpoints();
 app.MapInvoicingEndpoints();
 app.MapCreditEndpoints();
 app.MapFeatureFlagAdminEndpoints();
+app.MapSubscriptionEndpoints();
 
 if (builder.Configuration.GetValue<bool>("Wompi:Enabled"))
 {

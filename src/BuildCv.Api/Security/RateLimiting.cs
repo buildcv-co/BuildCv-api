@@ -12,6 +12,9 @@ public static class RateLimiting
     public const string AuthPolicy = "auth";
     public const string ConsentPolicy = "consent";
     public const string AdminPolicy = "admin";
+    public const string SubscriptionPolicy = "subscription";
+    public const string SubscriptionCancelPolicy = "subscription-cancel";
+    public const string SubscriptionWebhookPolicy = "subscription-webhook";
 
     public static IServiceCollection AddAppRateLimiting(this IServiceCollection services)
     {
@@ -85,6 +88,36 @@ public static class RateLimiting
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = 30,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                    }));
+
+            options.AddPolicy(SubscriptionPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: ClientKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                    }));
+
+            options.AddPolicy(SubscriptionCancelPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: ClientKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5,
+                        Window = TimeSpan.FromHours(1),
+                        QueueLimit = 0,
+                    }));
+
+            options.AddPolicy(SubscriptionWebhookPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: ClientKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 60,
                         Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0,
                     }));

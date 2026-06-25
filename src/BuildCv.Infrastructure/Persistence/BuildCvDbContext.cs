@@ -1,5 +1,6 @@
 using BuildCv.Domain.Auth;
 using BuildCv.Domain.Credits;
+using BuildCv.Domain.FeatureFlags;
 using BuildCv.Domain.Invoicing;
 using BuildCv.Domain.Payments;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +24,10 @@ public sealed class BuildCvDbContext(DbContextOptions<BuildCvDbContext> options)
     public DbSet<Payment> Payments => Set<Payment>();
 
     public DbSet<CreditLedgerEntry> CreditLedgerEntries => Set<CreditLedgerEntry>();
+
+    public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
+
+    public DbSet<FeatureFlagAuditLog> FeatureFlagAuditLogs => Set<FeatureFlagAuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

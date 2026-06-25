@@ -217,6 +217,89 @@ namespace BuildCv.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("BuildCv.Domain.FeatureFlags.FeatureFlag", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("CurrentValue")
+                        .HasColumnType("boolean")
+                        .HasColumnName("current_value");
+
+                    b.Property<bool>("DefaultValue")
+                        .HasColumnType("boolean")
+                        .HasColumnName("default_value");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("feature_flags", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_feature_flags_current_value_not_null", "current_value IS NOT NULL");
+                        });
+                });
+
+            modelBuilder.Entity("BuildCv.Domain.FeatureFlags.FeatureFlagAuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<Guid>("ChangedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("changed_by");
+
+                    b.Property<string>("FlagName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("flag_name");
+
+                    b.Property<bool>("NewValue")
+                        .HasColumnType("boolean")
+                        .HasColumnName("new_value");
+
+                    b.Property<bool?>("OldValue")
+                        .HasColumnType("boolean")
+                        .HasColumnName("old_value");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FlagName", "ChangedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_feature_flag_audit_log_flag_name_changed_at");
+
+                    b.ToTable("feature_flag_audit_log", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_feature_flag_audit_log_new_value_not_null", "new_value IS NOT NULL");
+                        });
+                });
+
             modelBuilder.Entity("BuildCv.Domain.Invoicing.Invoice", b =>
                 {
                     b.Property<Guid>("Id")

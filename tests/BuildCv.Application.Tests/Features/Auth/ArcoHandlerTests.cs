@@ -2,6 +2,7 @@ using BuildCv.Application.Features.Auth;
 using BuildCv.Domain.Auth;
 using BuildCv.Domain.Common;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BuildCv.Application.Tests.Features.Auth;
 
@@ -107,7 +108,7 @@ public sealed class ArcoHandlerTests
     }
 
     [Fact]
-    public async Task DeleteUserDataHandler_deletes_and_revokes_consent()
+    public async Task DeleteUserDataHandler_hard_deletes_when_no_payments()
     {
         var userId = Guid.NewGuid();
         var user = new User
@@ -130,7 +131,7 @@ public sealed class ArcoHandlerTests
             Purpose = "data-access"
         });
         var userData = new InMemoryUserDataStore(user);
-        var handler = new DeleteUserDataHandler(consent, userData);
+        var handler = new DeleteUserDataHandler(consent, userData, NullLogger<DeleteUserDataHandler>.Instance);
 
         var result = await handler.HandleAsync(
             new DeleteUserDataCommand(userId), CancellationToken.None);
@@ -140,6 +141,8 @@ public sealed class ArcoHandlerTests
         userAfter.IsFailure.Should().BeTrue();
         var activeConsent = await consent.GetActiveAsync(userId, "data-access");
         activeConsent.Should().BeNull();
+        var logs = await userData.GetTreatmentLogsAsync(userId);
+        logs.Should().Contain(l => l.Action == "delete");
     }
 
     [Fact]
@@ -147,13 +150,85 @@ public sealed class ArcoHandlerTests
     {
         var userData = new InMemoryUserDataStore(new User { Id = Guid.NewGuid() });
         var consent = new InMemoryConsentStore();
-        var handler = new DeleteUserDataHandler(consent, userData);
+        var handler = new DeleteUserDataHandler(consent, userData, NullLogger<DeleteUserDataHandler>.Instance);
 
         var result = await handler.HandleAsync(
             new DeleteUserDataCommand(Guid.NewGuid()), CancellationToken.None);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("CONSENT/REQUIRED");
+    }
+
+    [Fact]
+    public async Task DeleteUserDataHandler_anonymizes_when_user_has_payments()
+    {
+        var userId = Guid.NewGuid();
+        var user = new User
+        {
+            Id = userId,
+            Provider = "google",
+            ProviderId = "g-1",
+            Email = "paid@b.com",
+            Name = "Paid",
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow
+        };
+        var consent = new InMemoryConsentStore();
+        consent.Add(new ConsentRecord
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            PolicyVersion = 1,
+            ConsentDate = DateTime.UtcNow,
+            Purpose = "data-access"
+        });
+        var userData = new InMemoryUserDataStore(user);
+        userData.SeedPayment(userId);
+        var handler = new DeleteUserDataHandler(consent, userData, NullLogger<DeleteUserDataHandler>.Instance);
+
+        var result = await handler.HandleAsync(
+            new DeleteUserDataCommand(userId), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var userAfter = await userData.GetByIdAsync(userId);
+        userAfter.IsSuccess.Should().BeTrue();
+        userAfter.Value.Email.Should().Be("[deleted]@anonymized");
+        userAfter.Value.Name.Should().Be("[Deleted User]");
+        userAfter.Value.ProviderId.Should().Be("redacted");
+        var logs = await userData.GetTreatmentLogsAsync(userId);
+        logs.Should().Contain(l => l.Action == "anonymize");
+    }
+
+    [Fact]
+    public async Task DeleteUserDataHandler_preserves_payments_metadata_via_seeded_flag()
+    {
+        var userId = Guid.NewGuid();
+        var user = new User
+        {
+            Id = userId,
+            Provider = "google",
+            ProviderId = "g-2",
+            Email = "paid2@b.com",
+            Name = "Paid2",
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow
+        };
+        var consent = new InMemoryConsentStore();
+        consent.Add(new ConsentRecord
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            PolicyVersion = 1,
+            ConsentDate = DateTime.UtcNow,
+            Purpose = "data-access"
+        });
+        var userData = new InMemoryUserDataStore(user);
+        userData.SeedPayment(userId);
+        var handler = new DeleteUserDataHandler(consent, userData, NullLogger<DeleteUserDataHandler>.Instance);
+
+        await handler.HandleAsync(new DeleteUserDataCommand(userId), CancellationToken.None);
+
+        (await userData.HasPaymentsAsync(userId, CancellationToken.None)).Should().BeTrue();
     }
 
     [Fact]
@@ -228,7 +303,7 @@ public sealed class ArcoHandlerTests
     }
 
     [Fact]
-    public async Task DeleteUserDataHandler_via_interface_deletes_and_revokes()
+    public async Task DeleteUserDataHandler_via_interface_anonymizes_with_payments()
     {
         var userId = Guid.NewGuid();
         var user = new User
@@ -251,15 +326,15 @@ public sealed class ArcoHandlerTests
             Purpose = "data-access"
         });
         IUserDataStore userData = new InMemoryUserDataStore(user);
-        var handler = new DeleteUserDataHandler(consent, userData);
+        ((InMemoryUserDataStore)userData).SeedPayment(userId);
+        var handler = new DeleteUserDataHandler(consent, userData, NullLogger<DeleteUserDataHandler>.Instance);
 
         var result = await handler.HandleAsync(
             new DeleteUserDataCommand(userId), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         var userAfter = await userData.GetByIdAsync(userId);
-        userAfter.IsFailure.Should().BeTrue();
-        var activeConsent = await consent.GetActiveAsync(userId, "data-access");
-        activeConsent.Should().BeNull();
+        userAfter.IsSuccess.Should().BeTrue();
+        userAfter.Value.Email.Should().Be("[deleted]@anonymized");
     }
 }

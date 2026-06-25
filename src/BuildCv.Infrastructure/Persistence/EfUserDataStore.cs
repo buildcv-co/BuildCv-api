@@ -74,6 +74,35 @@ public sealed class EfUserDataStore(BuildCvDbContext dbContext) : IUserDataStore
         }
     }
 
+    public async Task<Result> AnonymizeAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await dbContext.Users.FindAsync([userId], ct);
+        if (user is null)
+        {
+            return Result.Failure(new Error("ARCO/DATA_NOT_FOUND", "User not found"));
+        }
+
+        dbContext.Entry(user).CurrentValues.SetValues(new User
+        {
+            Id = user.Id,
+            Provider = "redacted",
+            ProviderId = "redacted",
+            Email = "[deleted]@anonymized",
+            Name = "[Deleted User]",
+            CreatedAt = user.CreatedAt,
+            LastLoginAt = user.LastLoginAt,
+            CreditBalance = user.CreditBalance,
+        });
+
+        await dbContext.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
+    public async Task<bool> HasPaymentsAsync(Guid userId, CancellationToken ct = default)
+    {
+        return await dbContext.Payments.AnyAsync(p => p.UserId == userId, ct);
+    }
+
     public async Task AddTreatmentLogAsync(DataTreatmentLog log, CancellationToken ct = default)
     {
         dbContext.DataTreatmentLogs.Add(log);

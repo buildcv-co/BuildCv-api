@@ -17,6 +17,10 @@ public interface IUserDataStore
 
     Task DeleteAsync(Guid userId, CancellationToken ct = default);
 
+    Task<Result> AnonymizeAsync(Guid userId, CancellationToken ct = default);
+
+    Task<bool> HasPaymentsAsync(Guid userId, CancellationToken ct = default);
+
     Task AddTreatmentLogAsync(DataTreatmentLog log, CancellationToken ct = default);
 
     Task<IReadOnlyList<DataTreatmentLog>> GetTreatmentLogsAsync(Guid userId, CancellationToken ct = default);

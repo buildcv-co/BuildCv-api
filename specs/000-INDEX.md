@@ -3,7 +3,7 @@
 > **Este archivo es el entry point oficial al estado del producto BuildCv.**
 > Cualquier agente o humano que necesite saber "qué está hecho, qué está en curso, qué falta" debe leer esto primero.
 
-**Última actualización:** 2026-06-09 (010-persistence shipped, 011-factus specs created)
+**Última actualización:** 2026-06-24 (013-credit-consumption SHIPPED — 3 chained PRs merged: Domain+App PR1, Infra+DB PR2, API+Web PR3; 012-wompi shipped: 3 chained PRs + 1 warning-fix PR)
 
 ## Constitución vigente
 
@@ -33,13 +33,16 @@
 | 008 | `observability` | v0.5.1 | ✅ SHIPPED | `main` | — |
 | 009 | `auth` | v1 | ✅ SHIPPED (47 tasks, 290 tests) | `main` | — |
 | 010 | `persistence` | v1 | ✅ SHIPPED (38 tasks, 342 tests) | `main` | — |
-| 011 | `factus` | v1 | 📋 PLANEADO | — | — |
+| 011 | `factus` | v1 | ✅ SHIPPED (DIAN invoicing, opcional) | `main` | — |
+| 012 | `wompi` | v1 | ✅ SHIPPED (Wompi payment gateway, 3 chained PRs + warning-fix) | `main` | — |
+| 013 | `credit-consumption` | v1 | ✅ SHIPPED (credit ledger closes the v1 monetization loop; webhook→invoice→ledger in one tx; 1-credit `RequireCredits` filter on `/adapt`; ARCO anonymize + cascade ledger + KEEP payments/invoices; 3 chained PRs) | `main` | — |
 
 ## Leyenda de status
 
 - ✅ **SHIPPED** — feature cerrada, en producción, tests pasando
 - 🚧 **EN CURSO** — implementación activa
 - 📋 **PLANEADO** — los 7 artifacts están escritos; esperando ventana de implementación
+- 🔵 **PROPOSAL COMPLETE** — solo `proposal.md` está escrito; pendiente `sdd-spec` → `sdd-design` → `sdd-tasks` → `sdd-apply`
 - 🗄️ **ARCHIVADO** — feature antigua, conservada solo para historia
 
 > **Convención de numeración cross-repo:** Los números 002–005 son correlativos (tienen contraparte frontend+backend = mismo producto). A partir de 006, cada repo (`BuildCv-api` / `BuildCv-web`) tiene su propia secuencia para features independientes. Ver también `BuildCv-web/specs/000-INDEX.md`.
@@ -209,6 +212,25 @@ Este feature NO tiene implementación en el backend. El API no recibe cambios: r
 - **Architecture:** IInvoiceProvider port in Application, FactusAdapter + LocalInvoiceProvider in Infrastructure, feature flag `Factus:Enabled`
 - **Constitution compliance:** Art. VI ✅ (ports in Application, adapters in Infrastructure), Art. IX ✅ (facturación DIAN opcional, no bloquea uso del sistema)
 
+### 012-wompi (v1)
+
+- **Spec:** [specs/012-wompi/spec.md](./012-wompi/spec.md)
+- **Proposal:** [specs/012-wompi/proposal.md](./012-wompi/proposal.md)
+- **Design:** [specs/012-wompi/design.md](./012-wompi/design.md)
+- **Tasks:** [specs/012-wompi/tasks.md](./012-wompi/tasks.md)
+- **Archive report:** [specs/012-wompi/archive-report.md](./012-wompi/archive-report.md)
+- **Endpoints:** `POST /api/v1/payments/checkout`, `POST /api/v1/payments/webhook` (HMAC), `GET /api/v1/payments/{id}`, `GET /api/v1/payments`
+- **Status:** Wompi (Colombian payment gateway) Widget Checkout Web integration. 3 chained PRs (`feature-branch-chain`) + 1 warning-fix PR delivered in 3h 21min wall-clock.
+- **Architecture:** `IPaymentProvider` + `IPaymentStore` ports in Application, `WompiAdapter` (HMAC SHA256) + `EfPaymentStore` + `InMemoryPaymentStore` + `DisabledPaymentProvider` in Infrastructure, `PaymentReconciliationWorker` (IHostedService, polling 60s) for stale-Pending recovery, integration with 011-factus via `IInvoiceProvider` on Approved.
+- **Key features:** 3 credit packages in COP (Starter 10 / Standard 50 / Pro 100), server-side confirmation (Art. IX FR-046/048/049), idempotent webhooks (unique index on `wompi_transaction_id` + `idempotency_key`), background reconciliation for webhook delivery failures, feature flag `Wompi:Enabled`, environment gating (sandbox/production).
+- **Tests:** 451/451 backend passing (83 new payment tests), 718/718 frontend passing (8 new BFF/widget tests). TDD: red→green on every handler + adapter.
+- **Zero suppressions** (Art. VIII / project rules).
+- **Constitution compliance:** Art. III ✅ (no PII in logs, no card data), Art. VI ✅ (Clean Architecture ports), Art. VIII ✅ (TDD), Art. IX FR-046 ✅ (server-side confirmation via webhook + GET /v1/transactions + reconciliation worker), Art. IX FR-048 ✅ (verify amount/status server-side), Art. IX FR-049 ✅ (browser events advisory only, webhook + GET are source of truth).
+- **Deviations from design:** (1) `Payment.ProviderSessionId` added (PR1) to enable idempotent session replay without re-calling the provider; (2) EF shadow property `xmin` for PostgreSQL system column optimistic concurrency (avoids touching Domain); (3) `InvoiceType.Invoice` enum value added (warning fix PR) for payment-triggered Factus invoices. All non-breaking, additive.
+- **Commits:** `562f735` (PR1 domain+application) → `790b26b` (PR2 infrastructure+DB) → `8a7a3a7` (PR3 endpoints+BFF) → `a94c53e` (PR3 doc sync) → `7aa141b` (5 sdd-verify warnings closed via TDD).
+- **Git tag:** `012-wompi-v1.0` at commit `7aa141b`.
+- **Follow-up:** 012 deferred "Credit consumption logic (separate feature)" (proposal.md line 24). **013-credit-consumption** is the explicit follow-up that closes the v1 monetization loop.
+
 ## Features ARCHIVADAS
 
 ### 001-mvp-cv-ats (MVP original)
@@ -224,7 +246,9 @@ Este feature NO tiene implementación en el backend. El API no recibe cambios: r
 3. ~~**008-observability (backend)**~~ → ✅ SHIPPED (commit `4975966`)
 4. ~~**009-auth**~~ → ✅ SHIPPED (47 tasks, 290 tests, specs migrated)
 5. ~~**010-persistence**~~ → ✅ SHIPPED (38 tasks, 342 tests)
-6. **011-factus** — facturación DIAN opcional, sin gates externos
+6. ~~**011-factus**~~ → ✅ SHIPPED (DIAN invoicing opcional, invoice integration wired on payment Approved)
+7. ~~**012-wompi**~~ → ✅ SHIPPED (Wompi payment gateway, 3 chained PRs + 1 warning-fix PR, tag `012-wompi-v1.0`)
+8. **013-credit-consumption** → 📋 TASKS COMPLETE (artifacts: [proposal.md](./013-credit-consumption/proposal.md), [spec.md](./013-credit-consumption/spec.md), [design.md](./013-credit-consumption/design.md), [tasks.md](./013-credit-consumption/tasks.md)). Próximo: `sdd-apply` → 3 chained PRs (Domain+Application / Infrastructure+DB / API+Web), cada uno mergeable a `main`, cada uno con build+test green. Forecast: +90 tests (35 Application + 20 Integration + 10 API e2e + 25 Web e2e).
 
 ## Reglas de mantenimiento
 

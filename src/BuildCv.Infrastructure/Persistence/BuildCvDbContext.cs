@@ -3,6 +3,7 @@ using BuildCv.Domain.Credits;
 using BuildCv.Domain.FeatureFlags;
 using BuildCv.Domain.Invoicing;
 using BuildCv.Domain.Payments;
+using BuildCv.Domain.Subscriptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace BuildCv.Infrastructure.Persistence;
@@ -28,6 +29,8 @@ public sealed class BuildCvDbContext(DbContextOptions<BuildCvDbContext> options)
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
 
     public DbSet<FeatureFlagAuditLog> FeatureFlagAuditLogs => Set<FeatureFlagAuditLog>();
+
+    public DbSet<Subscription> Subscriptions => Set<Subscription>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,5 +1,9 @@
+using BuildCv.Application.Common;
+using BuildCv.Application.Features.Credits;
 using BuildCv.Application.Features.Invoicing;
 using BuildCv.Application.Features.Payments;
+using BuildCv.Application.Tests.Credits;
+using BuildCv.Domain.Credits;
 using BuildCv.Domain.Payments;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,6 +15,8 @@ public sealed class HandleWebhookHandlerTests
     private readonly TestPaymentStore _store = new();
     private readonly TestPaymentProvider _provider = new();
     private readonly TestInvoiceProvider _invoices = new();
+    private readonly TestCreditLedger _credits = new();
+    private readonly AlwaysEnabledFeatureFlag _featureFlag = new();
     private readonly HandleWebhookHandler _handler;
 
     public HandleWebhookHandlerTests()
@@ -19,6 +25,8 @@ public sealed class HandleWebhookHandlerTests
             _store,
             _provider,
             _invoices,
+            _credits,
+            _featureFlag,
             NullLogger<HandleWebhookHandler>.Instance);
     }
 
@@ -87,6 +95,7 @@ public sealed class HandleWebhookHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _invoices.CreatedInvoices.Should().BeEmpty();
+        _credits.AllEntries.Should().BeEmpty();
     }
 
     [Fact]
@@ -142,6 +151,8 @@ public sealed class HandleWebhookHandlerTests
             _store,
             _provider,
             invoiceProvider: null,
+            _credits,
+            _featureFlag,
             NullLogger<HandleWebhookHandler>.Instance);
 
         var payment = CreatePendingPayment("tx-noinvprov");
@@ -183,6 +194,117 @@ public sealed class HandleWebhookHandlerTests
 
         result.IsSuccess.Should().BeTrue();
         _invoices.CreatedInvoices.Should().BeEmpty();
+        _credits.AllEntries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task HandleAsync_credits_user_on_approved_when_feature_flag_enabled()
+    {
+        var payment = CreatePendingPayment("tx-credit");
+        await _store.AddAsync(payment);
+
+        _provider.SetWebhookSignatureValid(true);
+        _provider.SetTransactionStatus("APPROVED");
+
+        var command = new HandleWebhookCommand
+        {
+            Payload = """{"transaction": {"id": "tx-credit", "status": "APPROVED", "amount_in_cents": 1500000}}""",
+            SignatureHeader = "valid-hmac"
+        };
+
+        var result = await _handler.HandleAsync(command, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        _credits.AllEntries.Should().HaveCount(1);
+        var entry = _credits.AllEntries.Single();
+        entry.Reason.Should().Be(CreditLedgerReason.Purchase);
+        entry.Reference.Should().Be($"payment:{payment.Id}");
+        entry.Delta.Should().Be(payment.Credits);
+        entry.UserId.Should().Be(payment.UserId);
+        (await _credits.GetBalanceAsync(payment.UserId, CancellationToken.None)).Should().Be(payment.Credits);
+    }
+
+    [Fact]
+    public async Task HandleAsync_does_not_credit_user_when_feature_flag_disabled()
+    {
+        var disabledHandler = new HandleWebhookHandler(
+            _store,
+            _provider,
+            _invoices,
+            _credits,
+            new AlwaysDisabledFeatureFlag(),
+            NullLogger<HandleWebhookHandler>.Instance);
+
+        var payment = CreatePendingPayment("tx-flagoff");
+        await _store.AddAsync(payment);
+
+        _provider.SetWebhookSignatureValid(true);
+        _provider.SetTransactionStatus("APPROVED");
+
+        var command = new HandleWebhookCommand
+        {
+            Payload = """{"transaction": {"id": "tx-flagoff", "status": "APPROVED", "amount_in_cents": 1500000}}""",
+            SignatureHeader = "valid-hmac"
+        };
+
+        var result = await disabledHandler.HandleAsync(command, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        _credits.AllEntries.Should().BeEmpty();
+        _invoices.CreatedInvoices.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task HandleAsync_does_not_fail_webhook_when_credit_grant_throws()
+    {
+        var throwingCredits = new ThrowingCreditLedger();
+        var handlerWithThrowingCredits = new HandleWebhookHandler(
+            _store,
+            _provider,
+            _invoices,
+            throwingCredits,
+            _featureFlag,
+            NullLogger<HandleWebhookHandler>.Instance);
+
+        var payment = CreatePendingPayment("tx-throw");
+        await _store.AddAsync(payment);
+
+        _provider.SetWebhookSignatureValid(true);
+        _provider.SetTransactionStatus("APPROVED");
+
+        var command = new HandleWebhookCommand
+        {
+            Payload = """{"transaction": {"id": "tx-throw", "status": "APPROVED", "amount_in_cents": 1500000}}""",
+            SignatureHeader = "valid-hmac"
+        };
+
+        var result = await handlerWithThrowingCredits.HandleAsync(command, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var updated = await _store.GetByWompiTransactionIdAsync("tx-throw");
+        updated!.Status.Should().Be(PaymentStatus.Approved);
+    }
+
+    [Fact]
+    public async Task HandleAsync_is_idempotent_when_credit_grant_replays()
+    {
+        var payment = CreatePendingPayment("tx-replay");
+        await _store.AddAsync(payment);
+
+        _provider.SetWebhookSignatureValid(true);
+        _provider.SetTransactionStatus("APPROVED");
+
+        var command = new HandleWebhookCommand
+        {
+            Payload = """{"transaction": {"id": "tx-replay", "status": "APPROVED", "amount_in_cents": 1500000}}""",
+            SignatureHeader = "valid-hmac"
+        };
+
+        await _handler.HandleAsync(command, CancellationToken.None);
+        await _handler.HandleAsync(command, CancellationToken.None);
+
+        _credits.AllEntries.Should().HaveCount(1);
+        (await _credits.GetBalanceAsync(payment.UserId, CancellationToken.None)).Should().Be(payment.Credits);
     }
 
     private static Payment CreatePendingPayment(string wompiTransactionId) => new()
@@ -199,4 +321,47 @@ public sealed class HandleWebhookHandlerTests
         CreatedAt = DateTime.UtcNow,
         UpdatedAt = DateTime.UtcNow
     };
+}
+
+internal sealed class AlwaysEnabledFeatureFlag : ICreditsFeatureFlag
+{
+    public bool IsEnabled => true;
+}
+
+internal sealed class AlwaysDisabledFeatureFlag : ICreditsFeatureFlag
+{
+    public bool IsEnabled => false;
+}
+
+internal sealed class ThrowingCreditLedger : ICreditLedger
+{
+    public Task<CreditLedgerEntry> AccreditAsync(
+        Guid userId,
+        CreditLedgerReason reason,
+        string reference,
+        int delta,
+        int balanceAfter,
+        string? metadata,
+        CancellationToken ct)
+        => throw new InvalidOperationException("Simulated ledger failure for test.");
+
+    public Task<CreditLedgerEntry?> FindByReferenceAsync(
+        Guid userId,
+        CreditLedgerReason reason,
+        string reference,
+        CancellationToken ct)
+        => Task.FromResult<CreditLedgerEntry?>(null);
+
+    public Task<int> GetBalanceAsync(Guid userId, CancellationToken ct)
+        => Task.FromResult(0);
+
+    public Task<IReadOnlyList<CreditLedgerEntry>> GetHistoryAsync(
+        Guid userId,
+        int limit,
+        CreditCursorPosition? before,
+        CancellationToken ct)
+        => Task.FromResult<IReadOnlyList<CreditLedgerEntry>>([]);
+
+    public Task<int> CountConsumptionsSinceAsync(Guid userId, DateTime since, CancellationToken ct)
+        => Task.FromResult(0);
 }

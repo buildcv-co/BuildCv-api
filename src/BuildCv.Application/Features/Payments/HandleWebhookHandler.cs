@@ -1,5 +1,9 @@
+using System.Text.Json;
+using BuildCv.Application.Common;
+using BuildCv.Application.Features.Credits;
 using BuildCv.Application.Features.Invoicing;
 using BuildCv.Domain.Common;
+using BuildCv.Domain.Credits;
 using BuildCv.Domain.Invoicing;
 using BuildCv.Domain.Payments;
 using Microsoft.Extensions.Logging;
@@ -10,6 +14,8 @@ public sealed class HandleWebhookHandler(
     IPaymentStore store,
     IPaymentProvider provider,
     IInvoiceProvider? invoiceProvider,
+    ICreditLedger? creditLedger,
+    ICreditsFeatureFlag creditsFeature,
     ILogger<HandleWebhookHandler> logger)
 {
     public async Task<Result<Payment>> HandleAsync(HandleWebhookCommand command, CancellationToken ct)
@@ -65,21 +71,57 @@ public sealed class HandleWebhookHandler(
 
         await store.UpdateAsync(updated, ct);
 
-        if (updated.Status == PaymentStatus.Approved && invoiceProvider is not null)
+        if (updated.Status == PaymentStatus.Approved)
         {
-            try
+            if (invoiceProvider is not null)
             {
-                await CreateInvoiceForPaymentAsync(updated, ct);
+                try
+                {
+                    await CreateInvoiceForPaymentAsync(updated, ct);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex,
+                        "Invoice creation failed for payment {PaymentId}; payment remains Approved",
+                        updated.Id);
+                }
             }
-            catch (Exception ex)
+
+            if (creditsFeature.IsEnabled && creditLedger is not null)
             {
-                logger.LogError(ex,
-                    "Invoice creation failed for payment {PaymentId}; payment remains Approved",
-                    updated.Id);
+                try
+                {
+                    await AccreditCreditsAsync(updated, creditLedger, ct);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex,
+                        "Credit grant failed for payment {PaymentId}; payment remains Approved (reconciliation will retry)",
+                        updated.Id);
+                }
             }
         }
 
         return Result.Success(updated);
+    }
+
+    private async Task AccreditCreditsAsync(Payment payment, ICreditLedger ledger, CancellationToken ct)
+    {
+        var balance = await ledger.GetBalanceAsync(payment.UserId, ct);
+        var newBalance = balance + payment.Credits;
+
+        await ledger.AccreditAsync(
+            userId: payment.UserId,
+            reason: CreditLedgerReason.Purchase,
+            reference: $"payment:{payment.Id}",
+            delta: payment.Credits,
+            balanceAfter: newBalance,
+            metadata: JsonSerializer.Serialize(new { payment.Id, payment.WompiTransactionId }),
+            ct: ct);
+
+        logger.LogInformation(
+            "Credit grant for payment {PaymentId}: user {UserId} +{Credits} (balance {NewBalance})",
+            payment.Id, payment.UserId, payment.Credits, newBalance);
     }
 
     private async Task CreateInvoiceForPaymentAsync(Payment payment, CancellationToken ct)

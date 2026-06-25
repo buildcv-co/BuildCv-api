@@ -1,4 +1,5 @@
 using BuildCv.Domain.Auth;
+using BuildCv.Domain.Credits;
 using BuildCv.Domain.Invoicing;
 using BuildCv.Domain.Payments;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,8 @@ public sealed class BuildCvDbContext(DbContextOptions<BuildCvDbContext> options)
     public DbSet<NumberingRange> NumberingRanges => Set<NumberingRange>();
 
     public DbSet<Payment> Payments => Set<Payment>();
+
+    public DbSet<CreditLedgerEntry> CreditLedgerEntries => Set<CreditLedgerEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

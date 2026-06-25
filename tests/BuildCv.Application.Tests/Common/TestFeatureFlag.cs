@@ -21,6 +21,7 @@ internal sealed class TestFeatureFlag : IFeatureFlag
 
     public Task<bool> IsEnabledAsync(string name, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         Interlocked.Increment(ref _enabledCalls);
         if (_cache.TryGetValue(name, out var cached))
         {
@@ -38,12 +39,14 @@ internal sealed class TestFeatureFlag : IFeatureFlag
 
     public Task<FeatureFlag?> GetAsync(string name, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         _store.TryGetValue(name, out var flag);
         return Task.FromResult(flag);
     }
 
     public Task<IReadOnlyList<FeatureFlag>> ListAsync(CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         IReadOnlyList<FeatureFlag> snapshot = _store.Values
             .OrderBy(f => f.Name, StringComparer.Ordinal)
             .ToList();

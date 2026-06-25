@@ -11,12 +11,14 @@ internal sealed class TestFeatureFlagStore : IFeatureFlagStore
 
     public Task<FeatureFlag?> GetAsync(string name, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         _flags.TryGetValue(name, out var flag);
         return Task.FromResult(flag);
     }
 
     public Task<IReadOnlyList<FeatureFlag>> ListAsync(CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         IReadOnlyList<FeatureFlag> snapshot = _flags.Values
             .OrderBy(f => f.Name, StringComparer.Ordinal)
             .ToList();
@@ -25,12 +27,14 @@ internal sealed class TestFeatureFlagStore : IFeatureFlagStore
 
     public Task UpsertAsync(FeatureFlag flag, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         _flags[flag.Name] = flag;
         return Task.CompletedTask;
     }
 
     public Task AppendAuditLogAsync(FeatureFlagAuditLog log, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         _auditLog.Add(log);
         return Task.CompletedTask;
     }
@@ -38,6 +42,7 @@ internal sealed class TestFeatureFlagStore : IFeatureFlagStore
     public Task<IReadOnlyList<FeatureFlagAuditLog>> GetAuditLogAsync(
         string flagName, int limit, string? cursor, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var entries = _auditLog
             .Where(l => l.FlagName == flagName)
             .OrderByDescending(l => l.ChangedAt)

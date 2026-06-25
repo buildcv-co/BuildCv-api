@@ -11,7 +11,10 @@ public sealed record FeatureFlag
     public static FeatureFlag Create(string name, bool defaultValue)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException("Name required", nameof(name));
+        }
+
         return new FeatureFlag
         {
             Name = name,

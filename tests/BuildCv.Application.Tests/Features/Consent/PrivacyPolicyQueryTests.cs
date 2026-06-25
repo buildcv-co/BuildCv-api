@@ -42,4 +42,20 @@ public sealed class PrivacyPolicyQueryTests
 
         await act.Should().ThrowAsync<KeyNotFoundException>();
     }
+
+    [Fact]
+    public async Task HandleAsync_returns_v2_policy_with_credit_balance_ledger_arc_and_dian_disclosure()
+    {
+        var handler = new PrivacyPolicyQueryHandler();
+
+        var result = await handler.HandleAsync(
+            new PrivacyPolicyQuery(Version: 2), CancellationToken.None);
+
+        result.Should().NotBeNull();
+        result.Version.Should().Be(2);
+        result.Content.Should().Contain("credit balance");
+        result.Content.Should().Contain("ARCO");
+        result.Content.Should().Contain("DIAN");
+        result.Content.Should().Contain("ledger");
+    }
 }

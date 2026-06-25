@@ -135,7 +135,7 @@ public sealed class ConsentEndpointTests : IDisposable
     [Fact]
     public async Task Privacy_policy_endpoint_returns_policy_without_auth()
     {
-        var response = await _client.GetAsync("/api/v1/privacy-policy");
+        var response = await _client.GetAsync("/api/v1/privacy-policy?version=1");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 

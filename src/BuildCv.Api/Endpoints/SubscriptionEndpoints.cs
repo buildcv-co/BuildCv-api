@@ -101,7 +101,7 @@ public static class SubscriptionEndpoints
                 AccessUntil: canceled.CurrentPeriodEnd));
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase)
-                                                  || ex.Message.Contains("No active", StringComparison.OrdinalIgnoreCase))
+                                                  || ex.Message.Contains("No subscription", StringComparison.OrdinalIgnoreCase))
         {
             return Results.Json(
                 new { error = "SUBSCRIPTION/NOT_FOUND" },

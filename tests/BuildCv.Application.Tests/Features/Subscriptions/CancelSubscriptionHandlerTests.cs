@@ -29,7 +29,7 @@ public sealed class CancelSubscriptionHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_throws_when_no_active_subscription_exists_for_user()
+    public async Task HandleAsync_throws_when_no_subscription_exists_for_user()
     {
         var store = new TestSubscriptionStore();
         var provider = new TestSubscriptionProvider();
@@ -38,7 +38,7 @@ public sealed class CancelSubscriptionHandlerTests
         var act = () => handler.HandleAsync(Guid.NewGuid());
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*No active subscription*");
+            .WithMessage("*No subscription found*");
         provider.CancelledPaymentSources.Should().BeEmpty();
     }
 
@@ -56,5 +56,31 @@ public sealed class CancelSubscriptionHandlerTests
         var persisted = await store.GetByUserIdAsync(userId, includeCanceled: true);
         persisted.Should().NotBeNull();
         persisted!.Status.Should().Be(SubscriptionStatus.Canceled);
+    }
+
+    [Fact]
+    public async Task HandleAsync_returns_existing_canceled_subscription_when_called_twice()
+    {
+        var store = new TestSubscriptionStore();
+        var provider = new TestSubscriptionProvider();
+        var handler = new CancelSubscriptionHandler(store, provider, NullLogger<CancelSubscriptionHandler>.Instance);
+        var userId = Guid.NewGuid();
+        var start = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+        var sub = Subscription.Create(userId, SubscriptionPlan.Standard, "ps_idem", start);
+        await store.UpsertAsync(sub);
+
+        var first = await handler.HandleAsync(userId);
+        var second = await handler.HandleAsync(userId);
+
+        first.Status.Should().Be(SubscriptionStatus.Canceled);
+        first.CurrentPeriodEnd.Should().Be(sub.CurrentPeriodEnd);
+
+        second.Status.Should().Be(SubscriptionStatus.Canceled);
+        second.Id.Should().Be(first.Id);
+        second.CanceledAt.Should().Be(first.CanceledAt);
+        second.CurrentPeriodEnd.Should().Be(first.CurrentPeriodEnd);
+
+        provider.CancelledPaymentSources.Should().ContainSingle().Which.Should().Be("ps_idem",
+            "Wompi cancel must be called only once for the active subscription, not on the idempotent replay");
     }
 }

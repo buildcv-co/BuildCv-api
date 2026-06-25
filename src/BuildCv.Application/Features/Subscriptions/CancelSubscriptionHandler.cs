@@ -10,10 +10,18 @@ public sealed class CancelSubscriptionHandler(
 {
     public async Task<Subscription> HandleAsync(Guid userId, CancellationToken ct = default)
     {
-        var sub = await store.GetByUserIdAsync(userId, includeCanceled: false, ct);
+        var sub = await store.GetByUserIdAsync(userId, includeCanceled: true, ct);
         if (sub is null)
         {
-            throw new InvalidOperationException($"No active subscription for user {userId}");
+            throw new InvalidOperationException($"No subscription found for user {userId}");
+        }
+
+        if (sub.Status == SubscriptionStatus.Canceled)
+        {
+            logger.LogInformation(
+                "Subscription {SubscriptionId} already canceled for user {UserId}; idempotent no-op",
+                sub.Id, userId);
+            return sub;
         }
 
         await provider.CancelScheduledChargeAsync(sub.PaymentSourceId, ct);

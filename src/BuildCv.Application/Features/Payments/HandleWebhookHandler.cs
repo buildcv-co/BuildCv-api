@@ -2,6 +2,7 @@ using System.Text.Json;
 using BuildCv.Application.Common;
 using BuildCv.Application.Features.Credits;
 using BuildCv.Application.Features.Invoicing;
+using BuildCv.Application.Features.Subscriptions;
 using BuildCv.Domain.Common;
 using BuildCv.Domain.Credits;
 using BuildCv.Domain.Invoicing;
@@ -10,20 +11,57 @@ using Microsoft.Extensions.Logging;
 
 namespace BuildCv.Application.Features.Payments;
 
-public sealed class HandleWebhookHandler(
-    IPaymentStore store,
-    IPaymentProvider provider,
-    IInvoiceProvider? invoiceProvider,
-    ICreditLedger? creditLedger,
-    ICreditsFeatureFlag creditsFeature,
-    ILogger<HandleWebhookHandler> logger)
+public sealed class HandleWebhookHandler
 {
-    public async Task<Result<Payment>> HandleAsync(HandleWebhookCommand command, CancellationToken ct)
+    private readonly IPaymentStore _store;
+    private readonly IPaymentProvider _provider;
+    private readonly IInvoiceProvider? _invoiceProvider;
+    private readonly ICreditLedger? _creditLedger;
+    private readonly ICreditsFeatureFlag _creditsFeature;
+    private readonly HandleRecurringChargeHandler? _recurringHandler;
+    private readonly ILogger<HandleWebhookHandler> _logger;
+
+    public HandleWebhookHandler(
+        IPaymentStore store,
+        IPaymentProvider provider,
+        IInvoiceProvider? invoiceProvider,
+        ICreditLedger? creditLedger,
+        ICreditsFeatureFlag creditsFeature,
+        ILogger<HandleWebhookHandler> logger)
+        : this(store, provider, invoiceProvider, creditLedger, creditsFeature, recurringHandler: null, logger)
     {
-        if (!provider.VerifyWebhookSignature(command.Payload, command.SignatureHeader))
+    }
+
+    public HandleWebhookHandler(
+        IPaymentStore store,
+        IPaymentProvider provider,
+        IInvoiceProvider? invoiceProvider,
+        ICreditLedger? creditLedger,
+        ICreditsFeatureFlag creditsFeature,
+        HandleRecurringChargeHandler? recurringHandler,
+        ILogger<HandleWebhookHandler> logger)
+    {
+        _store = store;
+        _provider = provider;
+        _invoiceProvider = invoiceProvider;
+        _creditLedger = creditLedger;
+        _creditsFeature = creditsFeature;
+        _recurringHandler = recurringHandler;
+        _logger = logger;
+    }
+
+    public async Task<Result<Payment>> HandleAsync(HandleWebhookCommand command, CancellationToken ct = default)
+    {
+        if (!_provider.VerifyWebhookSignature(command.Payload, command.SignatureHeader))
         {
             return Result.Failure<Payment>(
                 new Error("PAYMENT/INVALID_SIGNATURE", "Webhook signature verification failed"));
+        }
+
+        var eventType = ExtractEventType(command.Payload);
+        if (eventType is "recurring_charge.successful" or "recurring_charge.failed")
+        {
+            return await HandleSubscriptionEventAsync(eventType, command, ct);
         }
 
         var wompiTransactionId = ExtractTransactionId(command.Payload);
@@ -33,7 +71,7 @@ public sealed class HandleWebhookHandler(
                 new Error("PAYMENT/INVALID_PAYLOAD", "Could not extract transaction ID from payload"));
         }
 
-        var payment = await store.GetByWompiTransactionIdAsync(wompiTransactionId, ct);
+        var payment = await _store.GetByWompiTransactionIdAsync(wompiTransactionId, ct);
         if (payment is null)
         {
             return Result.Failure<Payment>(
@@ -69,11 +107,11 @@ public sealed class HandleWebhookHandler(
             _ => payment with { UpdatedAt = now }
         };
 
-        await store.UpdateAsync(updated, ct);
+        await _store.UpdateAsync(updated, ct);
 
         if (updated.Status == PaymentStatus.Approved)
         {
-            if (invoiceProvider is not null)
+            if (_invoiceProvider is not null)
             {
                 try
                 {
@@ -81,21 +119,21 @@ public sealed class HandleWebhookHandler(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex,
+                    _logger.LogError(ex,
                         "Invoice creation failed for payment {PaymentId}; payment remains Approved",
                         updated.Id);
                 }
             }
 
-            if (creditsFeature.IsEnabled && creditLedger is not null)
+            if (_creditsFeature.IsEnabled && _creditLedger is not null)
             {
                 try
                 {
-                    await AccreditCreditsAsync(updated, creditLedger, ct);
+                    await AccreditCreditsAsync(updated, _creditLedger, ct);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex,
+                    _logger.LogError(ex,
                         "Credit grant failed for payment {PaymentId}; payment remains Approved (reconciliation will retry)",
                         updated.Id);
                 }
@@ -103,6 +141,43 @@ public sealed class HandleWebhookHandler(
         }
 
         return Result.Success(updated);
+    }
+
+    private async Task<Result<Payment>> HandleSubscriptionEventAsync(
+        string eventType,
+        HandleWebhookCommand command,
+        CancellationToken ct)
+    {
+        if (_recurringHandler is null)
+        {
+            return Result.Failure<Payment>(
+                new Error("PAYMENT/UNSUPPORTED_EVENT",
+                    $"Subscription event '{eventType}' received but subscription handler is not registered"));
+        }
+
+        var paymentSourceId = ExtractPaymentSourceId(command.Payload);
+        if (paymentSourceId is null)
+        {
+            return Result.Failure<Payment>(
+                new Error("PAYMENT/INVALID_PAYLOAD", "Could not extract payment_source_id from payload"));
+        }
+
+        var chargeId = ExtractChargeId(command.Payload) ?? paymentSourceId;
+        var now = DateTime.UtcNow;
+
+        if (eventType == "recurring_charge.successful")
+        {
+            await _recurringHandler.HandleSuccessAsync(paymentSourceId, now, chargeId, ct);
+            _logger.LogInformation("Recurring charge {ChargeId} processed via webhook", chargeId);
+        }
+        else
+        {
+            var reason = ExtractFailureReason(command.Payload) ?? "unknown";
+            await _recurringHandler.HandleFailureAsync(paymentSourceId, now, reason, ct);
+            _logger.LogInformation("Recurring charge {ChargeId} failure processed via webhook", chargeId);
+        }
+
+        return Result.Success<Payment>(default!);
     }
 
     private async Task AccreditCreditsAsync(Payment payment, ICreditLedger ledger, CancellationToken ct)
@@ -119,7 +194,7 @@ public sealed class HandleWebhookHandler(
             metadata: JsonSerializer.Serialize(new { payment.Id, payment.WompiTransactionId }),
             ct: ct);
 
-        logger.LogInformation(
+        _logger.LogInformation(
             "Credit grant for payment {PaymentId}: user {UserId} +{Credits} (balance {NewBalance})",
             payment.Id, payment.UserId, payment.Credits, newBalance);
     }
@@ -153,8 +228,8 @@ public sealed class HandleWebhookHandler(
             UpdatedAt = DateTime.UtcNow
         };
 
-        await invoiceProvider!.CreateInvoiceAsync(invoice, ct);
-        logger.LogInformation("Invoice created for payment {PaymentId}", payment.Id);
+        await _invoiceProvider!.CreateInvoiceAsync(invoice, ct);
+        _logger.LogInformation("Invoice created for payment {PaymentId}", payment.Id);
     }
 
     private static string? ExtractTransactionId(string payload)
@@ -196,6 +271,62 @@ public sealed class HandleWebhookHandler(
         }
 
         return start < numEnd ? payload[start..numEnd] : null;
+    }
+
+    private static string? ExtractEventType(string payload)
+    {
+        const string marker = "\"event\":\"";
+        var idx = payload.IndexOf(marker, StringComparison.Ordinal);
+        if (idx < 0)
+        {
+            return null;
+        }
+
+        var start = idx + marker.Length;
+        var end = payload.IndexOf('"', start);
+        return end < 0 ? null : payload[start..end];
+    }
+
+    private static string? ExtractPaymentSourceId(string payload)
+    {
+        const string marker = "\"payment_source_id\":\"";
+        var idx = payload.IndexOf(marker, StringComparison.Ordinal);
+        if (idx < 0)
+        {
+            return null;
+        }
+
+        var start = idx + marker.Length;
+        var end = payload.IndexOf('"', start);
+        return end < 0 ? null : payload[start..end];
+    }
+
+    private static string? ExtractChargeId(string payload)
+    {
+        const string marker = "\"charge_id\":\"";
+        var idx = payload.IndexOf(marker, StringComparison.Ordinal);
+        if (idx < 0)
+        {
+            return null;
+        }
+
+        var start = idx + marker.Length;
+        var end = payload.IndexOf('"', start);
+        return end < 0 ? null : payload[start..end];
+    }
+
+    private static string? ExtractFailureReason(string payload)
+    {
+        const string marker = "\"reason\":\"";
+        var idx = payload.IndexOf(marker, StringComparison.Ordinal);
+        if (idx < 0)
+        {
+            return null;
+        }
+
+        var start = idx + marker.Length;
+        var end = payload.IndexOf('"', start);
+        return end < 0 ? null : payload[start..end];
     }
 
     private static PaymentStatus MapWompiStatus(string payload)

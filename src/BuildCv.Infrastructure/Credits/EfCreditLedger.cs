@@ -80,6 +80,14 @@ public sealed class EfCreditLedger(BuildCvDbContext db, ILogger<EfCreditLedger> 
                 await tx.CommitAsync(ct);
                 return entry;
             }
+            catch (DbUpdateConcurrencyException) when (attempt < MaxRetries)
+            {
+                logger.LogWarning(
+                    "Concurrency conflict on attempt {Attempt} for user {UserId} reference {Reference} — retrying",
+                    attempt, userId, reference);
+                await tx.RollbackAsync(ct);
+                db.ChangeTracker.Clear();
+            }
             catch (DbUpdateException ex) when (attempt < MaxRetries && IsUniqueViolation(ex))
             {
                 logger.LogWarning(

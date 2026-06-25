@@ -29,16 +29,26 @@ public sealed class EfCreditConsumptionService(
             return CreditConsumeResult.Insufficient(balance);
         }
 
-        var entry = await ledger.AccreditAsync(
-            userId: userId,
-            reason: CreditLedgerReason.Consumption,
-            reference: reference,
-            delta: -1,
-            balanceAfter: balance - 1,
-            metadata: null,
-            ct: ct);
+        try
+        {
+            var entry = await ledger.AccreditAsync(
+                userId: userId,
+                reason: CreditLedgerReason.Consumption,
+                reference: reference,
+                delta: -1,
+                balanceAfter: balance - 1,
+                metadata: null,
+                ct: ct);
 
-        return new CreditConsumeResult(true, entry.BalanceAfter, null);
+            return new CreditConsumeResult(true, entry.BalanceAfter, null);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("would make balance negative"))
+        {
+            var currentBalance = await ledger.GetBalanceAsync(userId, ct);
+            logger.LogInformation("Credit consumption lost race for user {UserId}: balance={Balance} (adapt={AdaptRequestId})",
+                userId, currentBalance, adaptRequestId);
+            return CreditConsumeResult.Insufficient(currentBalance);
+        }
     }
 
     public async Task RefundConsumptionAsync(
@@ -68,7 +78,7 @@ public sealed class EfCreditConsumptionService(
             reference: refundReference,
             delta: 1,
             balanceAfter: newBalance,
-            metadata: $"refund of {consumeReference}",
+            metadata: System.Text.Json.JsonSerializer.Serialize(new { originalReference = consumeReference }),
             ct: ct);
 
         logger.LogInformation("Credit consumption refunded for user {UserId} adapt={AdaptRequestId} (consumeDelta={Delta})",

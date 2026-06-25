@@ -1,8 +1,5 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using BuildCv.Application.Features.Payments;
 using BuildCv.Domain.Payments;
@@ -104,27 +101,10 @@ public sealed class WompiAdapter : IPaymentProvider
 
     public bool VerifyWebhookSignature(string payload, string signatureHeader)
     {
-        if (string.IsNullOrEmpty(signatureHeader) || string.IsNullOrEmpty(_settings.WebhookSecret))
-        {
-            return false;
-        }
-
-        var keyBytes = Encoding.UTF8.GetBytes(_settings.WebhookSecret);
-        var payloadBytes = Encoding.UTF8.GetBytes(payload);
-
-        using var hmac = new HMACSHA256(keyBytes);
-        var computed = hmac.ComputeHash(payloadBytes);
-        var expected = HexToBytes(signatureHeader);
-
-        if (expected.Length != computed.Length)
-        {
-            return false;
-        }
-
-        return CryptographicOperations.FixedTimeEquals(computed, expected);
+        return WompiHmac.Verify(_settings.WebhookSecret, payload, signatureHeader);
     }
 
-    private static byte[] HexToBytes(string hex)
+    internal static byte[] HexToBytes(string hex)
     {
         var length = hex.Length;
         if ((length & 1) != 0)

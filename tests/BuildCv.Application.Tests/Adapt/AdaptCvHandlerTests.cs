@@ -112,6 +112,29 @@ internal sealed class FakeAiClient : IAiClient
         }
         return Task.FromResult(Response);
     }
+
+    public Task<T> CompleteStructuredAsync<T>(string prompt, CancellationToken ct) where T : class
+    {
+        LastPrompt = prompt;
+        if (ShouldThrow is not null)
+        {
+            throw ShouldThrow;
+        }
+
+        if (typeof(T) == typeof(AdaptationResponse))
+        {
+            var stub = (T)(object)new AdaptationResponse
+            {
+                AdaptedText = Response,
+                Reasoning = "fake reasoning",
+                AddedEntities = Array.Empty<string>(),
+                RemovedEntities = Array.Empty<string>()
+            };
+            return Task.FromResult(stub);
+        }
+
+        throw new NotSupportedException($"FakeAiClient does not implement {typeof(T).Name}");
+    }
 }
 
 internal sealed class TestGazetteer : ISkillGazetteer

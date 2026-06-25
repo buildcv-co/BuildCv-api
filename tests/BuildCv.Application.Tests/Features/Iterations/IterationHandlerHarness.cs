@@ -89,6 +89,23 @@ internal sealed class ScriptedAiClient : IAiClient
         }
         return _responses.Dequeue();
     }
+
+    public Task<T> CompleteStructuredAsync<T>(string prompt, CancellationToken ct) where T : class
+    {
+        var adapted = CompleteAsync(prompt, ct).GetAwaiter().GetResult();
+        if (typeof(T) == typeof(BuildCv.Application.Features.Adapt.AdaptationResponse))
+        {
+            var typed = (T)(object)new BuildCv.Application.Features.Adapt.AdaptationResponse
+            {
+                AdaptedText = adapted,
+                Reasoning = "scripted",
+                AddedEntities = Array.Empty<string>(),
+                RemovedEntities = Array.Empty<string>()
+            };
+            return Task.FromResult(typed);
+        }
+        throw new NotSupportedException($"ScriptedAiClient no implementa {typeof(T).Name}");
+    }
 }
 
 internal sealed class ScriptedScoringEngine : IScoringEngine

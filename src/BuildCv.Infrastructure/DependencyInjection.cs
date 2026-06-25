@@ -1,3 +1,4 @@
+using Anthropic.SDK;
 using BuildCv.Application.Common;
 using BuildCv.Application.Features.Adapt;
 using BuildCv.Application.Features.Auth;
@@ -50,7 +51,7 @@ public static class DependencyInjection
         services.AddSingleton<CrossEntityValidator>();
         services.AddSingleton<SeverityPolicy>();
         services.AddSingleton<PromptBuilder>();
-        services.AddSingleton<IAiClient, StubAiClient>();
+        RegisterAiClient(services, configuration);
         services.AddSingleton<AdaptCvHandler>(sp => new AdaptCvHandler(
             sp.GetRequiredService<IAiClient>(),
             sp.GetRequiredService<EntityExtractor>(),
@@ -199,5 +200,49 @@ public static class DependencyInjection
         services.AddHostedService<IterationCleanupWorker>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Selecciona el <see cref="IAiClient"/> según <c>Ai:Provider</c>:
+    /// <list type="bullet">
+    /// <item><c>Stub</c> — determinista, sin clave, default para tests/v0 (Constitution Art. IX).</item>
+    /// <item><c>Anthropic</c> — Claude con structured output vía tool use.</item>
+    /// <item><c>Minimax</c> — JSON mode OpenAI-compatible.</item>
+    /// </list>
+    /// La API key nunca se loguea (Constitution Art. III) y se resuelve de
+    /// <c>Ai:ApiKey</c> vía el binder estándar (env var <c>Ai__ApiKey</c>,
+    /// <c>dotnet user-secrets</c>, o <c>appsettings.Development.json</c>).
+    /// </summary>
+    private static void RegisterAiClient(IServiceCollection services, IConfiguration configuration)
+    {
+        var provider = configuration["Ai:Provider"];
+        if (string.IsNullOrWhiteSpace(provider) || provider.Equals("Stub", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IAiClient, StubAiClient>();
+            return;
+        }
+
+        if (provider.Equals("Anthropic", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton(_ => new AnthropicClient(
+                configuration["Ai:ApiKey"] ?? string.Empty));
+            services.AddSingleton<IAiClient, AnthropicAiClient>();
+            return;
+        }
+
+        if (provider.Equals("Minimax", StringComparison.OrdinalIgnoreCase))
+        {
+            var baseUrl = configuration["Ai:BaseUrl"] ?? "https://api.MiniMax.chat";
+            services.AddHttpClient<MinimaxAiClient>(MinimaxAiClient.HttpClientName, client =>
+            {
+                client.BaseAddress = new Uri(baseUrl);
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {configuration["Ai:ApiKey"] ?? string.Empty}");
+            });
+            services.AddSingleton<IAiClient>(sp => sp.GetRequiredService<MinimaxAiClient>());
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Ai:Provider desconocido: '{provider}'. Valores válidos: Stub, Anthropic, Minimax.");
     }
 }

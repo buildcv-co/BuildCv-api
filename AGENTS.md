@@ -4,7 +4,7 @@
 >
 > Este archivo es la **tarjeta de identidad** del proyecto. Las reglas operativas viven en `.opencode/rules/*.md` (auto-cargadas vía `opencode.json`); este AGENTS.md NO las duplica.
 
-## Constitución: ley suprema (v1.1.0)
+## Constitución: ley suprema (v1.2.0)
 
 `.specify/memory/constitution.md` prevalece sobre cualquier práctica, doc o sugerencia. **Cita el artículo (I–IX) cada vez que justifiques o rechaces algo.**
 

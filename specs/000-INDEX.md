@@ -3,13 +3,14 @@
 > **Este archivo es el entry point oficial al estado del producto BuildCv.**
 > Cualquier agente o humano que necesite saber "qué está hecho, qué está en curso, qué falta" debe leer esto primero.
 
-**Última actualización:** 2026-06-25 (013.2-web-jwt-cookie: **[Tasks] Ready to apply** — tasks.md escrito con 3 PRs chained (~400 LoC, +26 tests, guard lines `Decision needed before apply: Yes | Chained PRs recommended: Yes | Chain strategy: stacked-to-main | 400-line budget risk: Medium`); **Option B (NextAuth.js) APPROVED** por owner; design.md con `next-auth@^4.24.7`; **⚠️ Art. VI amendment documented pero NO RATIFICADO** (bloquea sdd-apply hasta owner sign-off + constitution bump 1.1.0 → 1.2.0 MENOR); 3 specs de follow-ups post-013: 013.1-arco-legal-review, 013.2-web-jwt-cookie, 013.3-refund-midstream-test; 013-credit-consumption **SHIPPED + ARCHIVED** con tag `013-credit-consumption-v1.0`)
+**Última actualización:** 2026-06-25 (014-constitution-v1.2.0: **✅ RATIFICADA** — `sdd-apply` ejecutado: 1 commit en `main` con 3 archivos (constitution.md, AGENTS.md, 000-INDEX.md) + CONSTITUTION-README.md no existía (T2 skip) + BuildCv-web/AGENTS.md sin referencia v1.1.0 (T4 no-op); enmienda MENOR 1.1.0 → 1.2.0 con `next-auth@^4.24.7` ratificado (Art. VI) + v0/v1 boundary documentado (Art. III/Art. VII) + cross-references Art. IX; ~21 líneas añadidas / ~3 modificadas / 0 eliminadas en constitution.md; zero code changes; pendiente `sdd-verify` (0 conflicts; tests pasan) → `sdd-archive`; see [proposal](./014-constitution-v1.2.0/proposal.md) + [spec](./014-constitution-v1.2.0/spec.md) + [design](./014-constitution-v1.2.0/design.md) + [tasks](./014-constitution-v1.2.0/tasks.md))
 
 ## Constitución vigente
 
 | Versión | Fecha | Estado | Diff |
 |---|---|---|---|
-| **1.1.0** | 2026-06-09 | ✅ Vigente | [specs/007-constitution-v1.1.0/contracts/constitution-diff.md](./007-constitution-v1.1.0/contracts/constitution-diff.md) |
+| **1.2.0** | 2026-06-25 | ✅ Vigente | [specs/014-constitution-v1.2.0/spec.md](./014-constitution-v1.2.0/spec.md) |
+| **1.1.0** | 2026-06-09 | 🗄️ Superada por v1.2.0 | [specs/007-constitution-v1.1.0/contracts/constitution-diff.md](./007-constitution-v1.1.0/contracts/constitution-diff.md) |
 | 1.0.0 | 2026-06-06 | 🗄️ Superada por v1.1.0 | backup en `.specify/memory/constitution.md.orig` |
 
 **Cambios clave de v1.1.0:**
@@ -36,12 +37,15 @@
 | 011 | `factus` | v1 | ✅ SHIPPED (DIAN invoicing, opcional) | `main` | — |
 | 012 | `wompi` | v1 | ✅ SHIPPED (Wompi payment gateway, 3 chained PRs + warning-fix) | `main` | — |
 | 013 | `credit-consumption` | v1 | ✅ SHIPPED + ARCHIVED (credit ledger closes the v1 monetization loop; webhook→invoice→ledger in one tx; 1-credit `RequireCredits` filter on `/adapt`; ARCO anonymize + cascade ledger + KEEP payments/invoices; 3 chained PRs; tag `013-credit-consumption-v1.0`) | `main` | — |
+| 013.2 | `web-jwt-cookie` | v1 | ✅ SHIPPED + ARCHIVED (closes auth flow gap; NextAuth.js integration; 3 chained PRs; tag `013.2-web-jwt-cookie-v1.0`) | `main` | — |
+| 014 | `constitution-v1.2.0` | governance | ✅ RATIFICADA (enmienda MENOR 1.1.0 → 1.2.0: ratifies `next-auth@^4.24.7` + documents v0/v1 boundary; zero code, minimal docs; sdd-apply done en 1 commit sobre `main`: 3 archivos modificados (constitution.md, AGENTS.md, 000-INDEX.md) + T2 skip (CONSTITUTION-README.md no existe) + T4 no-op (web AGENTS.md sin v1.1.0 ref); pendiente `sdd-verify` → `sdd-archive`) | `main` | — |
 
 ## Leyenda de status
 
 - ✅ **SHIPPED** — feature cerrada, en producción, tests pasando
 - 🚧 **EN CURSO** — implementación activa
 - 📋 **PLANEADO** — los 7 artifacts están escritos; esperando ventana de implementación
+- 📝 **SPEC COMPLETE** — `proposal.md` + `spec.md` escritos; pendiente `sdd-design` → `sdd-tasks` → `sdd-apply` → `sdd-verify` → `sdd-archive`
 - 🔵 **PROPOSAL COMPLETE** — solo `proposal.md` está escrito; pendiente `sdd-spec` → `sdd-design` → `sdd-tasks` → `sdd-apply`
 - 🗄️ **ARCHIVADO** — feature antigua, conservada solo para historia
 
@@ -231,6 +235,18 @@ Este feature NO tiene implementación en el backend. El API no recibe cambios: r
 - **Git tag:** `012-wompi-v1.0` at commit `7aa141b`.
 - **Follow-up:** 012 deferred "Credit consumption logic (separate feature)" (proposal.md line 24). **013-credit-consumption** is the explicit follow-up that closes the v1 monetization loop.
 
+### 014-constitution-v1.2.0 (governance) — ✅ RATIFICADA
+
+- **Proposal:** [specs/014-constitution-v1.2.0/proposal.md](./014-constitution-v1.2.0/proposal.md)
+- **Spec:** [specs/014-constitution-v1.2.0/spec.md](./014-constitution-v1.2.0/spec.md)
+- **Design:** [specs/014-constitution-v1.2.0/design.md](./014-constitution-v1.2.0/design.md) (literal markdown diff de las 6 secciones + apply strategy de 1 commit)
+- **Tasks:** [specs/014-constitution-v1.2.0/tasks.md](./014-constitution-v1.2.0/tasks.md) (5 tasks T1–T5)
+- **Tipo:** Enmienda MENOR (semver 1.1.0 → 1.2.0), 4 artículos modificados (III/VI/VII/IX cross-ref) + header bump + §Gobernanza append.
+- **Code impact:** CERO. **Docs impact:** ~21 líneas añadidas + ~3 modificadas + 0 eliminadas en `BuildCv-api/.specify/memory/constitution.md` (+ 3 supporting docs: AGENTS.md, AGENTS.md web side, 000-INDEX.md; CONSTITUTION-README.md no existe — T2 skip).
+- **Aprobación:** owner sign-off per §Gobernanza paso 3 (PR review sirve como ratificación).
+- **Apply:** ✅ `sdd-apply` ejecutado — 1 commit en `main` con 3 archivos del lado api (constitution.md + AGENTS.md + 000-INDEX.md). Pendiente `sdd-verify` (0 conflicts; tests pasan) → `sdd-archive`.
+- **Closes:** 2 pre-existing WARNINGs del verify de 013.2-web-jwt-cookie (Art. VI ratification) y 009-auth (Art. III/VII v0/v1 boundary).
+
 ## Features ARCHIVADAS
 
 ### 001-mvp-cv-ats (MVP original)
@@ -249,20 +265,21 @@ Este feature NO tiene implementación en el backend. El API no recibe cambios: r
 6. ~~**011-factus**~~ → ✅ SHIPPED (DIAN invoicing opcional, invoice integration wired on payment Approved)
 7. ~~**012-wompi**~~ → ✅ SHIPPED + ARCHIVED (Wompi payment gateway, 3 chained PRs + 1 warning-fix PR, tag `012-wompi-v1.0`)
 8. ~~**013-credit-consumption**~~ → ✅ SHIPPED + ARCHIVED (credit ledger + 1-credit consumption gate + ARCO anonymize, 3 chained PRs + 2 verify-fix commits, tag `013-credit-consumption-v1.0`). See [archive report](./013-credit-consumption/archive-report.md).
+9. ~~**013.2-web-jwt-cookie**~~ → ✅ SHIPPED + ARCHIVED (NextAuth.js integration closes Web ↔ .NET auth gap, 3 chained PRs, 11 work-unit commits, +32 tests, Art. VI amendment for `next-auth@^4.24.7` ratified, constitution bump 1.1.0 → 1.2.0 pending; tag `013.2-web-jwt-cookie-v1.0`). See [archive report](./013-credit-consumption-followups/013.2-web-jwt-cookie-archive-report.md).
 
 ### Próximos pasos candidatos (en orden de urgencia)
 
 1. **013.1-arco-legal-review** — **SPEC COMPLETO** ([specs/013-credit-consumption-followups/013.1-arco-legal-review.md](./013-credit-consumption-followups/013.1-arco-legal-review.md)). Checklist para revisión legal ARCO antes de v1 production rollout. Pendiente: sign-off del abogado colombiano. ⚠️ Bloquea producción.
-2. **013.2-web-jwt-cookie** — **📋 [TASKS] READY TO APPLY** ([tasks.md](./013-credit-consumption-followups/013.2-web-jwt-cookie-tasks.md) · [design.md](./013-credit-consumption-followups/013.2-web-jwt-cookie-design.md)). Cierra el gap de auth flow entre Web y el backend. **Owner eligió Option B (NextAuth.js)** → design reescrito con `next-auth@^4.24.7`. **⚠️ Art. VI amendment DOCUMENTED pero NO RATIFICADO** — añadir `next-auth` como dep requiere approval owner per §Gobernanza (Propuesta ✅, Impacto ✅, Aprobación ⏳, Registro ⏳ → constitution 1.1.0 → 1.2.0 MENOR). Si owner rechaza, fallback a Option A (cookie-based, 0 new deps, design previo archivado). **Pendiente**: owner ratification → sdd-apply (3 PRs chained, ~400 LoC, +26 tests, pattern mirrors 013-credit-consumption).
+2. ~~**013.2-web-jwt-cookie**~~ → ✅ **SHIPPED + ARCHIVED** (NextAuth.js integration closes auth flow gap; tag `013.2-web-jwt-cookie-v1.0`). See [archive report](./013-credit-consumption-followups/013.2-web-jwt-cookie-archive-report.md).
 3. **013.3-refund-midstream-test** — **SPEC COMPLETO** ([specs/013-credit-consumption-followups/013.3-refund-midstream-test.md](./013-credit-consumption-followups/013.3-refund-midstream-test.md)). Test de defense-in-depth para R3. Pendiente: sdd-apply (1 commit).
-4. **Constitution v1.2.0** — capture Art. IX server-side confirmation + idempotency patterns (proven in 012-wompi + 013-credit-consumption) as a normative rule for all future payment/credit providers.
+4. ~~**014-constitution-v1.2.0**~~ → ✅ **RATIFICADA** ([archive report pendiente](./014-constitution-v1.2.0/)). Enmienda MENOR 1.1.0 → 1.2.0 ejecutada: ratifies `next-auth@^4.24.7` (Art. VI) + v0/v1 boundary documentado (Art. III persistence, Art. VII auth) + cross-references Art. IX. Zero code changes; `sdd-apply` completo (1 commit en `main` sobre 3 archivos del api). Pendiente: `sdd-verify` → `sdd-archive`. Closes 2 pre-existing WARNINGs from 009-auth and ratifies Art. VI amendment from 013.2.
 
 ### Features PENDIENTES (post-013 follow-ups)
 
 | # | Feature | Status | Spec | Esfuerzo |
 |---|---------|--------|------|----------|
 | 013.1 | `arco-legal-review` | 📋 PLANEADO (no-code) | [spec.md](./013-credit-consumption-followups/013.1-arco-legal-review.md) | ~30 min (sign-off externo) |
-| 013.2 | `web-jwt-cookie` | 📋 [Tasks] Ready to apply | [spec.md](./013-credit-consumption-followups/013.2-web-jwt-cookie.md) · [design.md](./013-credit-consumption-followups/013.2-web-jwt-cookie-design.md) · [tasks.md](./013-credit-consumption-followups/013.2-web-jwt-cookie-tasks.md) | ~400 líneas (3 PRs chained, +26 tests) — **Option B (NextAuth.js)**, **⚠️ Art. VI amendment pending ratification** (bloquea sdd-apply) |
+| 013.2 | `web-jwt-cookie` | ✅ SHIPPED + ARCHIVED | [spec.md](./013-credit-consumption-followups/013.2-web-jwt-cookie.md) · [archive-report.md](./013-credit-consumption-followups/013.2-web-jwt-cookie-archive-report.md) | — |
 | 013.3 | `refund-midstream-test` | 📋 PLANEADO | [spec.md](./013-credit-consumption-followups/013.3-refund-midstream-test.md) | ~100 líneas (1 commit) |
 
 ## Reglas de mantenimiento

@@ -1,8 +1,8 @@
 # Constitución del Proyecto — BuildCv
 
 > **Artefacto SDD:** `.specify/memory/constitution.md` — ley fundamental del proyecto al estilo Spec Kit.
-> **Versión:** 1.1.0 · **Fecha de ratificación:** 2026-06-06 · **Última enmienda:** 2026-06-09
-> **Estado:** Vigente (ratificada). Enmienda menor sobre v1.0.0 — ver §Gobernanza → Historial de enmiendas.
+> **Versión:** 1.2.0 · **Fecha de ratificación:** 2026-06-06 · **Última enmienda:** 2026-06-25
+> **Estado:** Vigente (ratificada). Enmienda menor sobre v1.1.0 (014-constitution-v1.2.0) — ver §Gobernanza → Historial de enmiendas.
 > **Ámbito:** Aplica a TODOS los artefactos y a TODO el código del proyecto BuildCv — `spec.md`, `plan.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`, `tasks.md`, backend .NET, frontend Next.js, prompts de IA, copy público y documentos legales.
 > **Idioma:** español (documentación) · identificadores de código en inglés.
 
@@ -57,6 +57,9 @@ Esta Constitución fija las **reglas duras innegociables** del proyecto. Son pri
 
 **Principio.** El dato más seguro es el que no se guarda. v0 procesa en memoria; v0.5 (fase actual) admite persistencia local EXCLUSIVAMENTE en el dispositivo del usuario para soportar el flujo de edición de CV. v1.0 introducirá cuentas y persistencia server-side con consentimiento expreso (Habeas Data, Art. IX).
 
+> **v0/v1 boundary (added v1.2.0):**
+> v0 procesa en memoria y NO persiste NADA server-side (no cuentas, no CV, no job content). v1 (introducido en 009-auth) PUEDE persistir identidad de usuario (email, name, OAuth provider ID) y balance/ledger de créditos bajo controles Habeas Data (Art. IX). **CV y job content NUNCA se persisten server-side, independientemente de la versión.** Ver `BuildCv.Application/Features/Auth/IUserDataStore` (009-auth) y `BuildCv.Domain/Credits/CreditLedgerEntry` (013-credit-consumption) para la superficie de persistencia v1.
+
 **Reglas.**
 - En v0.5 (fase actual), el sistema **MUST** procesar el CV y la vacante en memoria del servidor. La persistencia local EXCLUSIVAMENTE en el dispositivo del usuario (localStorage, IndexedDB) está permitida para el borrador de edición, con borrado explícito al logout o a solicitud del usuario *(FR-040, FR-040a, NFR-001, NFR-001a)*. v1.0 introducirá cuentas de usuario y persistencia server-side con consentimiento expreso (Habeas Data, Art. IX).
 - El sistema **MUST NOT** registrar en logs el contenido del CV o de la vacante; solo metadatos no sensibles (longitudes, conteos, modelo usado, identificador de traza) *(FR-041, NFR-002)*.
@@ -103,6 +106,11 @@ Esta Constitución fija las **reglas duras innegociables** del proyecto. Son pri
 
 **Principio.** El backend ES el portafolio estrella del dueño y debe ser **ejemplar**. Cada decisión de backend se juzga también por la señal de calidad técnica que envía a un evaluador senior en Colombia.
 
+> **Approved external dependencies (added v1.2.0):**
+> - **Backend** (shared utilities): `diff@^5`, `zod@^3`
+> - **Frontend** (ratified 2026-06-25 by owner in 013.2-web-jwt-cookie, see `BuildCv-api/specs/013-credit-consumption-followups/013.2-web-jwt-cookie-design.md` §Art. VI Amendment): `web-vitals@^4`, `react-error-boundary@^5`, `next-auth@^4.24.7`
+> - **`next-auth@^4.x` es la ÚNICA librería web-side de auth aprobada.** Futuras dependencias relacionadas con auth (sessions, OAuth, JWT en cliente, etc.) requieren enmienda constitucional explícita.
+
 **Reglas.**
 - El backend **MUST** estar construido en ASP.NET Core (C#, .NET) con una arquitectura limpia y defendible (separación de capas, inversión de dependencias, SOLID), de modo que el núcleo de dominio no dependa de ASP.NET ni del SDK de IA.
 - El motor de puntaje **MUST** residir en el dominio como servicio puro, aislado de infraestructura, y los proveedores externos (IA, parseo de archivos, export PDF, pagos, persistencia local) **MUST** estar tras puertos/abstracciones (`IAiClient`, `ICvParser` para PDF/DOCX, `IPdfGenerator`, `IPaymentProvider`, `ICvStore` para localStorage en el frontend, …) para ser sustituibles sin tocar el núcleo *(materializa FR-030 y la portabilidad de hitos, v1.1.0)*.
@@ -125,6 +133,12 @@ Esta Constitución fija las **reglas duras innegociables** del proyecto. Son pri
 ## Artículo VII — v0 lanzable sin fricción; entrega por hitos
 
 **Principio.** Primero lanzar valor real, gratis y sin barreras. El alcance se entrega por hitos ordenados: **v0** (núcleo de valor) antes que **v0.5** (drafting local) antes que **v1** (cuentas, créditos, legal). Nada que no sea esencial para el núcleo bloquea el lanzamiento de v0.
+
+> **v0/v1 boundary (added v1.2.0):**
+> - **v0 endpoints** (anónimos, sin auth requerida): `/api/v1/score`, `/api/v1/adapt`, `/api/v1/export`, `/api/v1/import`, `/api/v1/health/*`. Rate-limited por IP.
+> - **v1 endpoints** (introducidos en 009-auth, requieren auth): `/api/v1/auth/*`, `/api/v1/user/*`, `/api/v1/payments/*`, `/api/v1/credits/*`. Rate-limited por usuario autenticado + IP fallback.
+> - La frontera es **per-endpoint**, declarada vía middleware `RequireAuthorization()`. Ambas políticas de rate-limit (IP y user) aplican acumulativamente según el rol del endpoint.
+> - **Migration note**: endpoints v0 pueden migrar a v1 en versiones futuras; la migración requiere una enmienda separada.
 
 **Reglas.**
 - v0 **MUST** ser usable de principio a fin **sin crear cuenta ni iniciar sesión** y sin guardado *(FR-040, US-008)*.
@@ -165,6 +179,12 @@ Esta Constitución fija las **reglas duras innegociables** del proyecto. Son pri
 ## Artículo IX — Cumplimiento Habeas Data al monetizar
 
 **Principio.** Desde el momento en que el sistema guarda datos personales o cobra, opera bajo la ley colombiana de protección de datos (Habeas Data) con consentimiento informado y derechos del titular plenamente respetados. Lo que se promete sobre privacidad coincide exactamente con lo verificado.
+
+> **Implementation references (added v1.2.0):**
+> - User identity persistence: `BuildCv.Application/Features/Auth/IUserDataStore` (009-auth)
+> - Credit ledger: `BuildCv.Domain/Credits/CreditLedgerEntry` (013-credit-consumption)
+> - ARCO anonymize pattern: `BuildCv.Application/Features/Auth/DeleteUserDataHandler.AnonymizeAsync` (013-credit-consumption)
+> - Privacy policy v2: `BuildCv.Application/Features/Consent/PrivacyPolicyQueryHandler` (013-credit-consumption fix-verify-blockers)
 
 **Reglas.**
 - Antes de prometer públicamente "retención cero / no entrenamiento" del proveedor de IA, el sistema **MUST** verificarlo contractualmente; mientras no esté confirmado, el copy público **MUST** comunicar honestamente que el contenido se envía al proveedor y puede retenerse según su política. ZDR es un **gate bloqueante**, no una suposición *(FR-042, NFR-022, NFR-022a)*.
@@ -214,7 +234,8 @@ Esta Constitución es la **ley fundamental** del proyecto BuildCv y **prevalece 
 |---|---|---|---|---|
 | **1.0.0** | 2026-06-06 | — | Ratificación inicial. Nueve artículos, sin persistencia server-side, ZDR pendiente. | — |
 | **1.1.0** | 2026-06-09 | MENOR | (a) Art. III admite persistencia local EXCLUSIVAMENTE en dispositivo del usuario, con botón "Limpiar borrador" (FR-040a/b). (b) Art. I añade defense in depth en editor (FR-029a). (c) Art. VI lista `ICvParser` y `ICvStore` como puertos oficiales. (d) Art. VII introduce hito v0.5 (carga de archivos + editor) y la política de rate-limit `"import"` (30/h/IP). (e) Art. IX deja nota de estado del gate ZDR (Anthropic estándar, ZDR no garantizado). Sin cambio MAYOR ni eliminación de principios. | `specs/007-constitution-v1.1.0/` |
+| **1.2.0** | 2026-06-25 | MENOR | (a) Art. III documenta v0/v1 boundary de persistencia (v0 nada; v1 identidad + ledger; CV/job nunca). (b) Art. VI ratifica `next-auth@^4.24.7` como ÚNICA librería web-side de auth aprobada. (c) Art. VII documenta v0/v1 auth boundary per-endpoint (v0 anónimos por IP; v1 autenticados por user+IP). (d) Art. IX cross-references a implementaciones (`IUserDataStore`, `CreditLedgerEntry`, `DeleteUserDataHandler.AnonymizeAsync`, `PrivacyPolicyQueryHandler`). Cierra 2 WARNINGs pre-existentes de 009-auth y 013.2-web-jwt-cookie verifies. Sin cambio MAYOR ni eliminación de principios. | `specs/014-constitution-v1.2.0/` |
 
 ---
 
-**Versión 1.1.0** · Ratificada el **2026-06-06** · Última enmienda **2026-06-09**.
+**Versión 1.2.0** · Ratificada el **2026-06-06** · Última enmienda **2026-06-25**.

@@ -114,6 +114,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 builder.Services.AddAuthPolicies();
 
+builder.Services.Configure<LocalAuthOptions>(builder.Configuration.GetSection("LocalAuth"));
+
 // Anti-abuso por IP (rate limiting nativo).
 builder.Services.AddAppRateLimiting();
 
@@ -162,6 +164,7 @@ if (app.Environment.IsDevelopment())
 app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<BuildCv.Api.Auth.LocalAuthMiddleware>();
 app.UseRateLimiter();
 
 app.MapHealthEndpoints();

@@ -129,9 +129,9 @@ public sealed class IterateAdaptationHandler(
                     Timestamp = stepStart,
                     Duration = DateTime.UtcNow - stepStart,
                 });
-logger.LogWarning(
-                        "Iteration timed out (requestId={RequestId}, iteration={I}, perIterationTimeoutSec={TimeoutSec})",
-                        request.RequestId, i, _perIterationTimeout.TotalSeconds);
+                logger.LogWarning(
+                                        "Iteration timed out (requestId={RequestId}, iteration={I}, perIterationTimeoutSec={TimeoutSec})",
+                                        request.RequestId, i, _perIterationTimeout.TotalSeconds);
             }
         }
 

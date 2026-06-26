@@ -15,11 +15,21 @@ namespace BuildCv.Domain.Scoring;
 /// </summary>
 public sealed class ScoringEngine(ISkillMatcher matcher, ISkillGazetteer gazetteer) : IScoringEngine
 {
-    public const string Version = "1.0.0";
+    /// <summary>Versión actual del motor sellada en cada <see cref="ScoreResult"/>
+    /// (Constitution Art. II FR-006: bumpear SemVer cuando cambie la fórmula).
+    /// PR 3c selló el bump a <c>2.0.0</c> al introducir <see cref="ScoreV2"/>;
+    /// <see cref="VersionV1"/> queda para clientes que aún pidan la línea
+    /// legacy por contrato.</summary>
+    public const string Version = "2.0.0";
+
+    /// <summary>Versión del motor v1 (legacy). Se usa en <see cref="ScoreV2"/>
+    /// cuando un consumidor con <c>engineVersion: "1.0.0"</c> recibe un
+    /// sobre v2 por error de ruteo, y para compatibilidad de logs.</summary>
+    public const string VersionV1 = "1.0.0";
 
     /// <summary>Versión del motor v2. Se sella en el contrato de respuesta
-    /// (<see cref="ScoreResultV2.EngineVersion"/>). El bump del <see cref="Version"/>
-    /// legacy se difiere a PR 3c; mientras conviven los dos en el binario.</summary>
+    /// (<see cref="ScoreResultV2.EngineVersion"/>). Constante pública para que
+    /// las pruebas y los consumidores puedan fijarlo sin ambigüedad.</summary>
     public const string VersionV2 = "2.0.0";
 
     private const string DisclaimerText =
@@ -83,7 +93,7 @@ public sealed class ScoringEngine(ISkillMatcher matcher, ISkillGazetteer gazette
             BuildRecommendations(job, matches, cv),
             BuildFormatIssues(cv),
             gates,
-            Version,
+            VersionV1,
             gazetteer.Version,
             job.ContextHash);
     }

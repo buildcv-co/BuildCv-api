@@ -1,3 +1,4 @@
+using BuildCv.Application.Features.Jobs;
 using BuildCv.Domain.Jobs;
 using BuildCv.Domain.Resumes;
 using BuildCv.Domain.Scoring;
@@ -5,26 +6,34 @@ using BuildCv.Domain.Scoring;
 namespace BuildCv.Application.Features.Scoring;
 
 /// <summary>
-/// Orquesta el análisis determinista. Discrimina por tipo de comando:
-/// <c>TextScoreCommand</c> (v1) usa los analizadores regex de texto;
-/// <c>StructuredScoreCommand</c> (v2) consume el CV estructurado
-/// directamente. La rama v2 se materializa en PR3 (ScoreV2).
+/// Orquesta el análisis determinista y discrimina por <c>engineVersion</c>:
+/// v1 (1.0.0) usa <see cref="IJobAnalyzer"/> + <see cref="ICvAnalyzer"/> +
+/// <see cref="IScoringEngine.Score"/> sobre texto pegado (camino legacy,
+/// intacto); v2 (2.0.0) invoca <see cref="ScoringEngine.ScoreV2"/>
+/// directamente sobre el <see cref="CvDocument"/> y el
+/// <see cref="BuildCv.Application.Features.Jobs.JobSpec"/> adaptados al
+/// <see cref="JobInput"/> mínimo del Domain. Cualquier <c>engineVersion</c>
+/// fuera del enum sellado lanza <see cref="UnsupportedScoreEngineVersionException"/>
+/// (defensa en profundidad, Constitution Art. V).
 /// </summary>
 public sealed class ScoreCvHandler(
     IJobAnalyzer jobAnalyzer,
     ICvAnalyzer cvAnalyzer,
     IScoringEngine engine)
 {
-    public ScoreResult Handle(ScoreCvCommand command)
+    public ScoreOutcome Handle(ScoreCvCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        return command switch
+        return command.EngineVersion switch
         {
-            TextScoreCommand text => ScoreV1(text),
-            StructuredScoreCommand structured => ScoreV2(structured),
-            _ => throw new InvalidOperationException(
-                $"Tipo de comando desconocido: {command.GetType().FullName}"),
+            EngineVersions.V1 => command is TextScoreCommand text
+                ? new V1ScoreOutcome(ScoreV1(text))
+                : throw new UnsupportedScoreEngineVersionException(command.EngineVersion),
+            EngineVersions.V2 => command is StructuredScoreCommand structured
+                ? new V2ScoreOutcome(ScoreV2(structured))
+                : throw new UnsupportedScoreEngineVersionException(command.EngineVersion),
+            _ => throw new UnsupportedScoreEngineVersionException(command.EngineVersion),
         };
     }
 
@@ -35,11 +44,9 @@ public sealed class ScoreCvHandler(
         return engine.Score(job, cv);
     }
 
-    private static ScoreResult ScoreV2(StructuredScoreCommand command)
+    private static ScoreResultV2 ScoreV2(StructuredScoreCommand command)
     {
-        // PR3 materializa el motor v2. Por ahora la ruta está sellada para
-        // no emitir un puntaje con un motor que aún no existe.
-        throw new NotImplementedException(
-            "ScoringEngine.ScoreV2 se implementa en PR3 (021 PR 3).");
+        var jobInput = JobSpecAdapter.ToJobInput(command.Job);
+        return ScoringEngine.ScoreV2(command.Cv, jobInput);
     }
 }

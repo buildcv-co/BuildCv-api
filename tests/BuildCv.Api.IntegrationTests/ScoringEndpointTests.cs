@@ -53,4 +53,107 @@ public sealed class ScoringEndpointTests(CustomWebApplicationFactory factory)
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task Post_With_EngineVersion_Header_2_0_0_Returns_ScoreResponse_With_PerSection_And_RedFlags_And_EngineVersion_2_0_0()
+    {
+        var request = new
+        {
+            cv = new
+            {
+                basics = new
+                {
+                    name = "Ada Lovelace",
+                    email = "ada@example.com",
+                    profiles = Array.Empty<object>(),
+                    confidence = new
+                    {
+                        name = "explicit",
+                        email = "explicit",
+                        phone = "inferred",
+                        location = "inferred",
+                        url = "inferred",
+                        profiles = "inferred",
+                        summary = "inferred",
+                        datosPersonales = "inferred",
+                    },
+                },
+                work = new[]
+                {
+                    new
+                    {
+                        entry = new
+                        {
+                            name = "Acme Corp",
+                            position = "Senior Backend Developer",
+                            startDate = "2020-01",
+                            endDate = "2024-12",
+                        },
+                        confidence = new
+                        {
+                            name = "explicit",
+                            position = "explicit",
+                            startDate = "explicit",
+                            endDate = "explicit",
+                            summary = "inferred",
+                            highlights = "inferred",
+                        },
+                    },
+                },
+                education = Array.Empty<object>(),
+                skills = new[]
+                {
+                    new { entry = new { name = "C#", level = (string?)null }, confidence = new { name = "explicit", level = "inferred" } },
+                    new { entry = new { name = ".NET", level = (string?)null }, confidence = new { name = "explicit", level = "inferred" } },
+                    new { entry = new { name = "PostgreSQL", level = (string?)null }, confidence = new { name = "explicit", level = "inferred" } },
+                },
+                projects = Array.Empty<object>(),
+                certificates = Array.Empty<object>(),
+                languages = Array.Empty<object>(),
+                meta = new { engineVersion = "2.0.0" },
+            },
+            job = new
+            {
+                title = "Senior Backend Developer",
+                company = "Acme S.A.",
+                description = "Buscamos ingeniero backend con experiencia en .NET.",
+                location = "Bogotá, Colombia",
+                employmentType = "FullTime",
+                requirements = new[] { "C#", ".NET", "PostgreSQL" },
+            },
+            engineVersion = "2.0.0",
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/v1/score", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<ScoreResponse>();
+        body.Should().NotBeNull();
+        body!.EngineVersion.Should().Be("2.0.0");
+        body.PerSection.Should().NotBeNull();
+        body.PerSection!.Experience.Should().NotBeNull();
+        body.PerSection.Skills.Should().NotBeNull();
+        body.RedFlags.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Post_With_EngineVersion_Header_1_0_0_Returns_Legacy_ScoreResponse()
+    {
+        var request = new
+        {
+            cvText = CvText,
+            jobText = JobText,
+            engineVersion = "1.0.0",
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/v1/score", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<ScoreResponse>();
+        body.Should().NotBeNull();
+        body!.EngineVersion.Should().Be("1.0.0");
+        body.Components.Should().NotBeEmpty();
+        body.PerSection.Should().BeNull();
+        body.RedFlags.Should().BeNull();
+    }
 }

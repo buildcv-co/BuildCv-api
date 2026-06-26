@@ -98,8 +98,11 @@ public sealed class IterateAdaptationHandler(
                 if (passedArtI)
                 {
                     var scoreCmd = new TextScoreCommand(adaptedCv.AdaptedCv, request.VacancyText);
-                    var scoreResult = scoreHandler.Handle(scoreCmd);
-                    score = scoreResult.Overall;
+                    var scoreOutcome = scoreHandler.Handle(scoreCmd);
+                    if (scoreOutcome is V1ScoreOutcome v1)
+                    {
+                        score = v1.Result.Overall;
+                    }
                 }
 
                 var step = new IterationStep

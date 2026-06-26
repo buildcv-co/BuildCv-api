@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using BuildCv.Api.Contracts;
+using BuildCv.Api.Filters;
 using BuildCv.Api.Security;
 using BuildCv.Application.Features.Auth;
 using BuildCv.Infrastructure.Auth;
@@ -109,6 +110,7 @@ public static class AuthEndpoints
                     new { type = "https://buildcv.com/errors/auth", title = result.Error.Code, status = 400, detail = result.Error.Message },
                     statusCode: 400);
         })
+        .AddEndpointFilter<BffCredentialFilter>()
         .RequireRateLimiting(RateLimiting.AuthPolicy)
         .WithName("WebSignup")
         .WithSummary("Registers or upserts a user from the NextAuth session (web BFF).");

@@ -187,6 +187,11 @@ All baseline test suites still pass (no regressions):
 
 3. **R10 — Privacy policy v3 with subscription disclosure**: Privacy policy stops at v2. **Recommended fix**: Add `new PrivacyPolicyResponse(Version: 3, Content: "... Subscription status and period dates ... tokenized Wompi-side ... ARCO delete cascade ... non-refundable ...")` to `PrivacyPolicyQueryHandler.Policies`. Add test asserting v3 content contains the four required sentences.
 
+**Closed by 017-subscription-followups (2026-06-26):**
+- R5 cancel idempotency: closed by commit `caaaf35` (2026-06-25) — `CancelSubscriptionHandler` now returns existing canceled sub on second call (test `HandleAsync_returns_existing_canceled_subscription_when_called_twice`).
+- R8 ARCO Wompi pre-cancel: closed by commit `cf958ec` (2026-06-25) — `DeleteUserDataHandler` now calls Wompi `cancelSubscriptionAsync` before cascade; Wompi failure surfaced honestly per Constitution Art. IV.
+- R10 privacy policy v3: closed by commit `5f8db66` (2026-06-25) — subscription disclosure paragraph added per spec acceptance.
+
 ### SUGGESTION (nice to have)
 
 - The `ISubscriptionService` interface is defined in spec but unused (only `ISubscriptionStore`/`ISubscriptionProvider`/`ISubscriptionFeatureFlag` are wired). Could either implement `ISubscriptionService` per spec or remove the interface from spec/code for consistency.
@@ -246,7 +251,7 @@ pnpm build                                        # Compiled successfully
 
 ## Verdict
 
-**PASS WITH WARNINGS** ✅ (READY TO ARCHIVE with recommended follow-ups in 017)
+**PASS WITH WARNINGS** ✅ (READY TO ARCHIVE — 3 WARNINGs closed by 017-subscription-followups on 2026-06-26, see [verify-report.md of 017](../017-subscription-followups/verify-report.md) for confirmation)
 
 The implementation is functionally complete, all 6 gates green, 834+760+85 = **1679/1679 tests pass with 0 failures and 0 regressions**. The 3 WARNINGs are minor spec deviations that do not break core subscription lifecycle:
 

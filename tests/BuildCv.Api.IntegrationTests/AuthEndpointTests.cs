@@ -143,6 +143,54 @@ public sealed class AuthEndpointTests(AuthTestWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task WebSignup_Returns200_WithUserId_WhenNewProvider()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/web-signup",
+            new WebSignupRequest("google", "g-new-1", "ada@example.com", "Ada"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("userId").GetGuid().Should().NotBe(Guid.Empty);
+    }
+
+    [Fact]
+    public async Task WebSignup_Returns400_OnUnknownProvider()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/web-signup",
+            new WebSignupRequest("facebook", "fb-1", "x@y.co", "X"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task WebSignup_Returns400_OnInvalidEmail()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/web-signup",
+            new WebSignupRequest("google", "g-1", "not-an-email", "X"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task WebSignup_IsIdempotent_SameUserIdOnSecondCall()
+    {
+        var first = await _client.PostAsJsonAsync("/api/v1/auth/web-signup",
+            new WebSignupRequest("google", "g-idem-1", "idem@example.com", "Idem"));
+        first.StatusCode.Should().Be(HttpStatusCode.OK);
+        var firstUserId = (await first.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("userId").GetGuid();
+
+        var second = await _client.PostAsJsonAsync("/api/v1/auth/web-signup",
+            new WebSignupRequest("google", "g-idem-1", "idem-updated@example.com", "Idem Updated"));
+        second.StatusCode.Should().Be(HttpStatusCode.OK);
+        var secondUserId = (await second.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("userId").GetGuid();
+
+        secondUserId.Should().Be(firstUserId);
+    }
+
+    [Fact]
     public async Task Full_flow_login_protected_refresh_logout()
     {
         var loginResponse = await LoginViaGoogle();

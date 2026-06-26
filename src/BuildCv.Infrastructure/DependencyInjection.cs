@@ -69,9 +69,14 @@ public static class DependencyInjection
 
         services.AddSingleton<PdfPigCvParser>();
         services.AddSingleton<OpenXmlCvParser>();
-        services.AddSingleton<ICvParser, ParserRouter>();
+        services.AddSingleton<ICvParser>(sp => sp.GetRequiredService<PdfPigCvParser>());
+        services.AddSingleton<ICvParser>(sp => sp.GetRequiredService<OpenXmlCvParser>());
+        services.AddSingleton<IStructuredParser>(sp => sp.GetRequiredService<PdfPigCvParser>());
+        services.AddSingleton<IStructuredParser>(sp => sp.GetRequiredService<OpenXmlCvParser>());
+        services.AddSingleton<ParserRouter>();
+        services.AddSingleton<IParserRouter>(sp => sp.GetRequiredService<ParserRouter>());
         services.AddSingleton<ImportCvHandler>(sp => new ImportCvHandler(
-            sp.GetRequiredService<ICvParser>(),
+            sp.GetRequiredService<IParserRouter>(),
             sp.GetRequiredService<IValidator<ImportCvCommand>>()));
 
         services.AddSingleton<JwtTokenAdapter>(sp => new JwtTokenAdapter(

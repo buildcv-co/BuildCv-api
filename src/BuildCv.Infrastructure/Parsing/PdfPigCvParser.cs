@@ -18,13 +18,17 @@ namespace BuildCv.Infrastructure.Parsing;
 /// Micro-batch 2b de 021: además de la ruta legacy 1.0.0, expone la ruta
 /// <see cref="IStructuredParser"/> 2.0.0 que devuelve <see cref="StructuredParseResult"/>.
 /// </summary>
-public sealed class PdfPigCvParser : ICvParser, IStructuredParser
+public sealed class PdfPigCvParser : ICvParser, IStructuredParser, IKnownMimeParser
 {
     private const int MaxPages = 100;
     private const int MaxTextLength = 50_000;
     private const int LineTolerancePts = 2;
     private const string LegacyEngineVersion = "1.0.0";
     private const string StructuredEngineVersion = "2.0.0";
+    private const string PdfMimeType = "application/pdf";
+
+    /// <inheritdoc />
+    public string SupportedMimeType => PdfMimeType;
 
     private const string WorkHeaderRegex =
         @"^\s*(?:EXPERIENCE|WORK\s+EXPERIENCE|EMPLOYMENT|EXPERIENCIA|EXPERIENCIA\s+LABORAL|TRABAJO)\s*[\.\:]*\s*$";

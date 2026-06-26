@@ -18,11 +18,15 @@ namespace BuildCv.Infrastructure.Parsing;
 /// preservando la estructura del DOCX (tablas y listas como
 /// <see cref="ResumeWorkEntry.Highlights"/>, sin aplanar con '\t').
 /// </summary>
-public sealed class OpenXmlCvParser : ICvParser, IStructuredParser
+public sealed class OpenXmlCvParser : ICvParser, IStructuredParser, IKnownMimeParser
 {
     private const int MaxTextLength = 50_000;
     private const string LegacyEngineVersion = "1.0.0";
     private const string StructuredEngineVersion = "2.0.0";
+    private const string DocxMimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+    /// <inheritdoc />
+    public string SupportedMimeType => DocxMimeType;
 
     private const string WorkHeaderRegex =
         @"^\s*(?:EXPERIENCE|WORK\s+EXPERIENCE|EMPLOYMENT|EXPERIENCIA|EXPERIENCIA\s+LABORAL|TRABAJO)\s*[\.\:]*\s*$";

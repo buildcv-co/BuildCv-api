@@ -75,6 +75,13 @@ public static class AuthEndpoints
             JwtTokenAdapter jwtAdapter,
             CancellationToken ct) =>
         {
+            if (string.IsNullOrWhiteSpace(request.RefreshToken))
+            {
+                return Results.Json(
+                    new { type = "https://buildcv.com/errors/auth", title = "AUTH/MISSING_REFRESH_TOKEN", status = 400, detail = "refreshToken is required" },
+                    statusCode: 400);
+            }
+
             var command = new RefreshTokenCommand(request.RefreshToken);
             var result = await handler.HandleAsync(command, ct);
 
@@ -107,22 +114,26 @@ public static class AuthEndpoints
         .WithSummary("Registers or upserts a user from the NextAuth session (web BFF).");
 
         app.MapPost("/api/v1/auth/logout", async (
-            RefreshTokenRequest request,
+            RefreshTokenRequest? request,
+            ClaimsPrincipal user,
             LogoutHandler handler,
             CancellationToken ct) =>
         {
-            var command = new LogoutCommand(request.RefreshToken);
+            var userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+            Guid? userId = Guid.TryParse(userIdClaim, out var parsed) ? parsed : null;
+
+            var command = new LogoutCommand(request?.RefreshToken, userId);
             var result = await handler.HandleAsync(command, ct);
 
             return result.IsSuccess
-                ? Results.Ok(new { message = "Logged out successfully" })
+                ? Results.Ok(new LogoutResponse("Logged out successfully"))
                 : Results.Json(
                     new { type = "https://buildcv.com/errors/auth", title = "LOGOUT_FAILED", status = 500, detail = "Logout failed" },
                     statusCode: 500);
         })
         .RequireRateLimiting(RateLimiting.AuthPolicy)
         .WithName("Logout")
-        .WithSummary("Revokes a refresh token (logout).");
+        .WithSummary("Revokes refresh tokens (logout). Accepts refreshToken in body OR bearer JWT in Authorization header for full revoke-all.");
 
         return app;
     }
@@ -141,4 +152,4 @@ public static class AuthEndpoints
     }
 }
 
-public sealed record RefreshTokenRequest(string RefreshToken);
+public sealed record RefreshTokenRequest(string? RefreshToken);

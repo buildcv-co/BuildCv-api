@@ -41,4 +41,17 @@ public sealed class InMemoryRefreshTokenStore : IRefreshTokenStore
         _tokens.TryRemove(token, out _);
         return Task.CompletedTask;
     }
+
+    public Task RevokeAllForUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        foreach (var key in _tokens.Keys.ToArray())
+        {
+            if (_tokens.TryGetValue(key, out var entry) && entry.UserId == userId)
+            {
+                _tokens.TryRemove(key, out _);
+            }
+        }
+
+        return Task.CompletedTask;
+    }
 }

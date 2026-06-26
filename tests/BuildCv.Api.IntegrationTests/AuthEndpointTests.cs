@@ -191,6 +191,46 @@ public sealed class AuthEndpointTests(AuthTestWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task Logout_WithBearerOnlyBody_RevokesAllRefreshTokens_ForUser()
+    {
+        var loginResponse = await LoginViaGoogle();
+        var accessToken = loginResponse.GetProperty("accessToken").GetString()!;
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        var logoutResponse = await _client.SendAsync(request);
+
+        logoutResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var refreshResponse = await _client.PostAsJsonAsync("/api/v1/auth/refresh",
+            new RefreshTokenRequest(loginResponse.GetProperty("refreshToken").GetString()!));
+        refreshResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task RefreshTokenRotation_PreservedAfterRevokeAll()
+    {
+        var loginResponse = await LoginViaGoogle();
+        var firstRefresh = loginResponse.GetProperty("refreshToken").GetString()!;
+
+        var firstRefreshResponse = await _client.PostAsJsonAsync("/api/v1/auth/refresh",
+            new RefreshTokenRequest(firstRefresh));
+        firstRefreshResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var secondRefresh = (await firstRefreshResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("refreshToken").GetString()!;
+
+        var accessToken = loginResponse.GetProperty("accessToken").GetString()!;
+        var logoutRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
+        logoutRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        var logoutResponse = await _client.SendAsync(logoutRequest);
+        logoutResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var reusedResponse = await _client.PostAsJsonAsync("/api/v1/auth/refresh",
+            new RefreshTokenRequest(secondRefresh));
+        reusedResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task Full_flow_login_protected_refresh_logout()
     {
         var loginResponse = await LoginViaGoogle();

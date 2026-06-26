@@ -194,5 +194,6 @@ public sealed class AuthPortContractsTests
         public Task<Result<Guid>> ValidateAsync(string token, CancellationToken ct = default)
             => Task.FromResult(_validToken ? Result.Success(_userId) : Result.Failure<Guid>(new Error("AUTH/REFRESH_REVOKED", "Revoked")));
         public Task RevokeAsync(string token, CancellationToken ct = default) => Task.CompletedTask;
+        public Task RevokeAllForUserAsync(Guid userId, CancellationToken ct = default) => Task.CompletedTask;
     }
 }

@@ -15,7 +15,9 @@ public sealed record ScoreResponse(
     KeywordAnalysisResponse KeywordAnalysis,
     IReadOnlyList<RecommendationResponse> Recommendations,
     IReadOnlyList<FormatIssueResponse> FormatIssues,
-    IReadOnlyList<GateResponse> GatesApplied);
+    IReadOnlyList<GateResponse> GatesApplied,
+    PerSectionResponse? PerSection = null,
+    IReadOnlyList<RedFlagResponse>? RedFlags = null);
 
 public sealed record ComponentResponse(
     string ComponentId,
@@ -52,3 +54,24 @@ public sealed record RecommendationResponse(
 public sealed record FormatIssueResponse(string Code, string Severity, string Message);
 
 public sealed record GateResponse(string ComponentId, double Cap, string Reason, string Message);
+
+/// <summary>
+/// Sub-puntaje por sección (engineVersion 2.0.0). Cada valor es 0–100 o
+/// <c>null</c> cuando la sección está ausente (renormalización, FR-011).
+/// </summary>
+public sealed record PerSectionResponse(
+    int? Experience,
+    int? Education,
+    int? Skills,
+    int? Certifications,
+    int? Contact);
+
+/// <summary>
+/// Señal informativa del motor 2.0.0 (Art. I — sin deducción).
+/// </summary>
+public sealed record RedFlagResponse(
+    string Code,
+    string Severity,
+    string Message,
+    int? Months = null,
+    int? EmployersIn5y = null);

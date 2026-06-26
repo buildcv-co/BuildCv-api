@@ -7,14 +7,13 @@ namespace BuildCv.Application.Tests.Import;
 
 public sealed class ImportCvHandlerTests
 {
-    private const string PdfBytes = "fake-pdf-bytes";
     private const string TraceId = "test-trace-1";
 
     [Fact]
-    public async Task Should_call_parser_and_return_success_when_parser_returns_result()
+    public async Task Should_call_router_and_return_success_when_router_returns_raw_result()
     {
-        var parser = new FakeParser();
-        var handler = new ImportCvHandler(parser, new ImportCvValidator());
+        var router = new FakeRouter(legacyText: "Fake parsed text");
+        var handler = new ImportCvHandler(router, new ImportCvValidator());
         var command = new ImportCvCommand(
             FileBytes: "%PDF-1.4 fake"u8.ToArray(),
             MimeType: "application/pdf",
@@ -24,17 +23,40 @@ public sealed class ImportCvHandlerTests
         var result = await handler.HandleAsync(command, CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.Text.Should().Be("Fake parsed text");
-        result.Value.EngineVersion.Should().Be("1.0.0");
-        result.Value.TraceId.Should().Be(TraceId);
-        parser.Calls.Should().Be(1);
+        var legacy = result.Value.Should().BeOfType<LegacyImportResult>().Subject;
+        legacy.Text.Should().Be("Fake parsed text");
+        legacy.EngineVersion.Should().Be("1.0.0");
+        legacy.TraceId.Should().Be(TraceId);
+        router.Calls.Should().Be(1);
     }
 
     [Fact]
-    public async Task Should_return_failure_with_code_when_parser_throws_ParserEngineException_for_encrypted_pdf()
+    public async Task Should_call_router_and_return_success_when_router_returns_structured_result()
     {
-        var parser = new FakeParser(throwCode: "PDF_ENCRYPTED");
-        var handler = new ImportCvHandler(parser, new ImportCvValidator());
+        var router = new FakeRouter(structured: MakeStructured());
+        var handler = new ImportCvHandler(router, new ImportCvValidator());
+        var command = new ImportCvCommand(
+            FileBytes: "%PDF-1.4 fake"u8.ToArray(),
+            MimeType: "application/pdf",
+            OriginalFileName: "cv.pdf",
+            TraceId: TraceId,
+            EngineVersion: "2.0.0");
+
+        var result = await handler.HandleAsync(command, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var structured = result.Value.Should().BeOfType<StructuredImportResult>().Subject;
+        structured.EngineVersion.Should().Be("2.0.0");
+        structured.TraceId.Should().Be(TraceId);
+        structured.Cv.Basics.Name.Should().Be("Ada Lovelace");
+        router.Calls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Should_return_failure_with_code_when_router_throws_ParserEngineException_for_encrypted_pdf()
+    {
+        var router = new FakeRouter(throwCode: "PDF_ENCRYPTED");
+        var handler = new ImportCvHandler(router, new ImportCvValidator());
         var command = new ImportCvCommand(
             FileBytes: "%PDF-1.4 encrypted"u8.ToArray(),
             MimeType: "application/pdf",
@@ -48,10 +70,10 @@ public sealed class ImportCvHandlerTests
     }
 
     [Fact]
-    public async Task Should_return_failure_with_code_when_parser_throws_ParserEngineException_for_scanned_pdf()
+    public async Task Should_return_failure_with_code_when_router_throws_ParserEngineException_for_scanned_pdf()
     {
-        var parser = new FakeParser(throwCode: "SCANNED_PDF");
-        var handler = new ImportCvHandler(parser, new ImportCvValidator());
+        var router = new FakeRouter(throwCode: "SCANNED_PDF");
+        var handler = new ImportCvHandler(router, new ImportCvValidator());
         var command = new ImportCvCommand(
             FileBytes: "%PDF-1.4 scanned"u8.ToArray(),
             MimeType: "application/pdf",
@@ -65,10 +87,10 @@ public sealed class ImportCvHandlerTests
     }
 
     [Fact]
-    public async Task Should_return_failure_with_code_when_parser_throws_ParserEngineException_for_protected_docx()
+    public async Task Should_return_failure_with_code_when_router_throws_ParserEngineException_for_protected_docx()
     {
-        var parser = new FakeParser(throwCode: "DOCX_PROTECTED");
-        var handler = new ImportCvHandler(parser, new ImportCvValidator());
+        var router = new FakeRouter(throwCode: "DOCX_PROTECTED");
+        var handler = new ImportCvHandler(router, new ImportCvValidator());
         var command = new ImportCvCommand(
             FileBytes: "PK fake"u8.ToArray(),
             MimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -82,10 +104,10 @@ public sealed class ImportCvHandlerTests
     }
 
     [Fact]
-    public async Task Should_return_failure_with_code_when_parser_throws_ParserEngineException_for_too_many_pages()
+    public async Task Should_return_failure_with_code_when_router_throws_ParserEngineException_for_too_many_pages()
     {
-        var parser = new FakeParser(throwCode: "TOO_MANY_PAGES");
-        var handler = new ImportCvHandler(parser, new ImportCvValidator());
+        var router = new FakeRouter(throwCode: "TOO_MANY_PAGES");
+        var handler = new ImportCvHandler(router, new ImportCvValidator());
         var command = new ImportCvCommand(
             FileBytes: "%PDF-1.4 long"u8.ToArray(),
             MimeType: "application/pdf",
@@ -101,8 +123,8 @@ public sealed class ImportCvHandlerTests
     [Fact]
     public async Task Should_wrap_generic_exception_as_IMPORT_ENGINE_ERROR()
     {
-        var parser = new FakeParser(throwGeneric: true);
-        var handler = new ImportCvHandler(parser, new ImportCvValidator());
+        var router = new FakeRouter(throwGeneric: true);
+        var handler = new ImportCvHandler(router, new ImportCvValidator());
         var command = new ImportCvCommand(
             FileBytes: "%PDF-1.4 oops"u8.ToArray(),
             MimeType: "application/pdf",
@@ -118,8 +140,8 @@ public sealed class ImportCvHandlerTests
     [Fact]
     public async Task Should_return_failure_with_IMPORT_VALIDATION_when_file_name_is_empty()
     {
-        var parser = new FakeParser();
-        var handler = new ImportCvHandler(parser, new ImportCvValidator());
+        var router = new FakeRouter();
+        var handler = new ImportCvHandler(router, new ImportCvValidator());
         var command = new ImportCvCommand(
             FileBytes: "%PDF-1.4 x"u8.ToArray(),
             MimeType: "application/pdf",
@@ -130,39 +152,78 @@ public sealed class ImportCvHandlerTests
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("IMPORT_VALIDATION");
-        parser.Calls.Should().Be(0);
+        router.Calls.Should().Be(0);
     }
 
-    private sealed class FakeParser : ICvParser
+    private static BuildCv.Domain.Resumes.CvDocument MakeStructured() => new(
+        Basics: new BuildCv.Domain.Resumes.Basics(
+            Name: "Ada Lovelace",
+            Email: "ada@example.com",
+            Phone: null,
+            Location: null,
+            Url: null,
+            Profiles: Array.Empty<BuildCv.Domain.Resumes.ResumeProfile>(),
+            Summary: null,
+            DatosPersonales: null,
+            Confidence: new BuildCv.Domain.Resumes.BasicsConfidence(
+                Name: BuildCv.Domain.Resumes.ConfidenceMarker.Inferred,
+                Email: BuildCv.Domain.Resumes.ConfidenceMarker.Inferred,
+                Phone: BuildCv.Domain.Resumes.ConfidenceMarker.Inferred,
+                Location: BuildCv.Domain.Resumes.ConfidenceMarker.Inferred,
+                Url: BuildCv.Domain.Resumes.ConfidenceMarker.Inferred,
+                Profiles: BuildCv.Domain.Resumes.ConfidenceMarker.Inferred,
+                Summary: BuildCv.Domain.Resumes.ConfidenceMarker.Inferred,
+                DatosPersonales: BuildCv.Domain.Resumes.ConfidenceMarker.Inferred)),
+        Work: Array.Empty<BuildCv.Domain.Resumes.TaggedResumeWork>(),
+        Education: Array.Empty<BuildCv.Domain.Resumes.TaggedResumeEducation>(),
+        Skills: Array.Empty<BuildCv.Domain.Resumes.TaggedResumeSkill>(),
+        Projects: Array.Empty<BuildCv.Domain.Resumes.TaggedResumeProject>(),
+        Certificates: Array.Empty<BuildCv.Domain.Resumes.TaggedResumeCertificate>(),
+        Languages: Array.Empty<BuildCv.Domain.Resumes.TaggedResumeLanguage>(),
+        Meta: new BuildCv.Domain.Resumes.CvMeta(EngineVersion: "2.0.0"));
+
+    private sealed class FakeRouter : IParserRouter
     {
+        private readonly string? _legacyText;
         private readonly string? _throwCode;
         private readonly bool _throwGeneric;
+        private readonly BuildCv.Domain.Resumes.CvDocument? _structured;
 
-        public FakeParser(string? throwCode = null, bool throwGeneric = false)
+        public FakeRouter(
+            string? legacyText = null,
+            string? throwCode = null,
+            bool throwGeneric = false,
+            BuildCv.Domain.Resumes.CvDocument? structured = null)
         {
+            _legacyText = legacyText;
             _throwCode = throwCode;
             _throwGeneric = throwGeneric;
+            _structured = structured;
         }
 
         public int Calls { get; private set; }
 
-        public ImportResult Parse(ImportCvCommand command)
+        public ParseResult Parse(ImportCvCommand command)
         {
             Calls++;
             if (_throwGeneric)
             {
                 throw new InvalidOperationException("engine exploded");
             }
+
             if (_throwCode is not null)
             {
                 throw new ParserEngineException(_throwCode, $"Simulated {_throwCode} failure");
             }
-            return new ImportResult(
-                Text: "Fake parsed text",
-                Sections: [],
-                Warnings: [],
-                EngineVersion: "1.0.0",
-                TraceId: command.TraceId);
+
+            if (_structured is not null)
+            {
+                return new StructuredParseResult(_structured, Array.Empty<ParsingWarning>());
+            }
+
+            return new RawParseResult(
+                Text: _legacyText ?? "Fake parsed text",
+                Warnings: Array.Empty<ParsingWarning>());
         }
     }
 }

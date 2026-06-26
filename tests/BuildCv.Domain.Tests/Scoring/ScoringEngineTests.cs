@@ -102,7 +102,7 @@ public sealed class ScoringEngineTests
     {
         var result = _harness.Score(Vacante, CvFuerte);
 
-        result.EngineVersion.Should().Be(ScoringEngine.Version);
+        result.EngineVersion.Should().Be(ScoringEngine.VersionV1);
         result.LexiconVersion.Should().Be("test-lex");
     }
 

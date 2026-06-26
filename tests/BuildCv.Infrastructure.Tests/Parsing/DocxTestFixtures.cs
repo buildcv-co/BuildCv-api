@@ -90,4 +90,66 @@ internal static class DocxTestFixtures
         var padding = Encoding.ASCII.GetBytes(new string('x', 1024));
         return bytes.Concat(padding).ToArray();
     }
+
+    public static byte[] CreateStructuredDocx(IReadOnlyList<DocxBlock> blocks)
+    {
+        using var ms = new MemoryStream();
+        using (var doc = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document))
+        {
+            var mainPart = doc.AddMainDocumentPart();
+            var body = new Body();
+
+            foreach (var block in blocks)
+            {
+                switch (block)
+                {
+                    case DocxParagraph p:
+                        body.AppendChild(new Paragraph(new Run(new Text(p.Text))));
+                        break;
+                    case DocxTable t:
+                        body.AppendChild(BuildTable(t));
+                        break;
+                }
+            }
+
+            mainPart.Document = new Document(body);
+            mainPart.Document.Save();
+        }
+
+        return ms.ToArray();
+    }
+
+    private static Table BuildTable(DocxTable t)
+    {
+        var table = new Table();
+        var props = new TableProperties(
+            new TableBorders(
+                new TopBorder { Val = BorderValues.Single, Size = 4 },
+                new BottomBorder { Val = BorderValues.Single, Size = 4 },
+                new LeftBorder { Val = BorderValues.Single, Size = 4 },
+                new RightBorder { Val = BorderValues.Single, Size = 4 },
+                new InsideHorizontalBorder { Val = BorderValues.Single, Size = 4 },
+                new InsideVerticalBorder { Val = BorderValues.Single, Size = 4 }));
+        table.AppendChild(props);
+
+        foreach (var rowCells in t.Rows)
+        {
+            var row = new TableRow();
+            foreach (var cellText in rowCells)
+            {
+                var cell = new TableCell(new Paragraph(new Run(new Text(cellText))));
+                row.AppendChild(cell);
+            }
+
+            table.AppendChild(row);
+        }
+
+        return table;
+    }
 }
+
+internal abstract record DocxBlock;
+
+internal sealed record DocxParagraph(string Text) : DocxBlock;
+
+internal sealed record DocxTable(IReadOnlyList<IReadOnlyList<string>> Rows) : DocxBlock;

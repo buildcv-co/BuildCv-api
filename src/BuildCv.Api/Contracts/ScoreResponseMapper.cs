@@ -1,3 +1,4 @@
+using BuildCv.Application.Features.Scoring;
 using BuildCv.Domain.Jobs;
 using BuildCv.Domain.Lexicon;
 using BuildCv.Domain.Scoring;
@@ -7,21 +8,83 @@ namespace BuildCv.Api.Contracts;
 /// <summary>Mapea el <see cref="ScoreResult"/> de dominio al DTO del contrato (enums → strings honestos).</summary>
 public static class ScoreResponseMapper
 {
-    public static ScoreResponse Map(ScoreResult result) => new(
+    private const string StructuredInputGateV2 = "StructuredInputV2";
+
+    private const string V2HonestyNotice =
+        "Resultado generado a partir de CV estructurado (JSON Resume).";
+
+    public static ScoreResponse Map(ScoreOutcome outcome) => outcome switch
+    {
+        V1ScoreOutcome v1 => Map(v1.Result),
+        V2ScoreOutcome v2 => Map(v2.Result),
+        _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "ScoreOutcome desconocido."),
+    };
+
+    public static ScoreResponse Map(ScoreResult result) => MapCore(
         result.Overall,
-        BandName(result.Band),
+        result.Band,
         result.Disclaimer,
         result.EngineVersion,
         result.LexiconVersion,
         result.ContextHash,
-        result.Components.Select(ToComponent).ToList(),
-        new KeywordAnalysisResponse(
-            result.Keywords.Present.Select(ToKeyword).ToList(),
-            result.Keywords.Missing.Select(ToKeyword).ToList(),
-            result.Keywords.Partial.Select(ToKeyword).ToList()),
-        result.Recommendations.Select(ToRecommendation).ToList(),
-        result.FormatIssues.Select(issue => new FormatIssueResponse(issue.Code, issue.Severity, issue.Message)).ToList(),
-        result.GatesApplied.Select(gate => new GateResponse(ComponentName(gate.Component), gate.Cap, gate.Reason, gate.Message)).ToList());
+        result.Components,
+        result.Keywords,
+        result.Recommendations,
+        result.FormatIssues,
+        result.GatesApplied.Select(gate => new GateResponse(ComponentName(gate.Component), gate.Cap, gate.Reason, gate.Message)).ToList(),
+        PerSection: null,
+        RedFlags: null);
+
+    public static ScoreResponse Map(ScoreResultV2 result) => MapCore(
+        result.OverallScore,
+        result.Legacy.Band,
+        V2HonestyNotice,
+        result.EngineVersion,
+        result.Legacy.LexiconVersion,
+        result.Legacy.ContextHash,
+        result.Legacy.Components,
+        result.Legacy.Keywords,
+        result.Legacy.Recommendations,
+        result.Legacy.FormatIssues,
+        new[] { new GateResponse(StructuredInputGateV2, 1.0, "structured-input", V2HonestyNotice) },
+        PerSection: new PerSectionResponse(
+            Experience: result.PerSection.Experience,
+            Education: result.PerSection.Education,
+            Skills: result.PerSection.Skills,
+            Certifications: result.PerSection.Certifications,
+            Contact: result.PerSection.Contact),
+        RedFlags: result.RedFlags.Select(flag => new RedFlagResponse(flag.Code, flag.Severity.ToString(), flag.Message)).ToList());
+
+    private static ScoreResponse MapCore(
+        int overallScore,
+        ScoreBand band,
+        string honestyNotice,
+        string engineVersion,
+        string lexiconVersion,
+        string contextId,
+        IReadOnlyList<ComponentScore> components,
+        KeywordAnalysis keywords,
+        IReadOnlyList<Recommendation> recommendations,
+        IReadOnlyList<FormatIssue> formatIssues,
+        IReadOnlyList<GateResponse> gatesApplied,
+        PerSectionResponse? PerSection,
+        IReadOnlyList<RedFlagResponse>? RedFlags) => new(
+            overallScore,
+            BandName(band),
+            honestyNotice,
+            engineVersion,
+            lexiconVersion,
+            contextId,
+            components.Select(ToComponent).ToList(),
+            new KeywordAnalysisResponse(
+                keywords.Present.Select(ToKeyword).ToList(),
+                keywords.Missing.Select(ToKeyword).ToList(),
+                keywords.Partial.Select(ToKeyword).ToList()),
+            recommendations.Select(ToRecommendation).ToList(),
+            formatIssues.Select(issue => new FormatIssueResponse(issue.Code, issue.Severity, issue.Message)).ToList(),
+            gatesApplied,
+            PerSection,
+            RedFlags);
 
     private static ComponentResponse ToComponent(ComponentScore component) => new(
         ComponentName(component.Id),
@@ -56,6 +119,7 @@ public static class ScoreResponseMapper
         ScoreBand.Medio => "Coincidencia media",
         ScoreBand.Bueno => "Coincidencia alta",
         ScoreBand.Fuerte => "Coincidencia muy alta",
+        ScoreBand.Alto => "Coincidencia alta (motor 2.0.0)",
         _ => "Coincidencia media",
     };
 

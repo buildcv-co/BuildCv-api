@@ -4,9 +4,9 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 namespace BuildCv.Api.Health;
 
 /// <summary>
-/// Verifica que el parser de CV (PDF/DOCX) está disponible y funcional.
+/// Verifica que el router de parsing (PDF/DOCX) está disponible y funcional.
 /// </summary>
-public sealed class ParserHealthCheck(ICvParser parser) : IHealthCheck
+public sealed class ParserHealthCheck(IParserRouter router) : IHealthCheck
 {
     public Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
@@ -14,15 +14,14 @@ public sealed class ParserHealthCheck(ICvParser parser) : IHealthCheck
     {
         try
         {
-            // Verificación ligera: el parser existe y es del tipo esperado
-            var parserType = parser.GetType().Name;
+            var routerType = router.GetType().Name;
             return Task.FromResult(HealthCheckResult.Healthy(
-                $"Parser disponible: {parserType}"));
+                $"ParserRouter disponible: {routerType}"));
         }
         catch (Exception ex)
         {
             return Task.FromResult(HealthCheckResult.Unhealthy(
-                "Parser no disponible",
+                "ParserRouter no disponible",
                 ex));
         }
     }

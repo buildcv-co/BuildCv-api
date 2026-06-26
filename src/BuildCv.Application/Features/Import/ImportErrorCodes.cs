@@ -21,4 +21,10 @@ public static class ImportErrorCodes
     public const string InvalidDocx = "IMPORT_INVALID_DOCX";
 
     public const string EngineError = "IMPORT_ENGINE_ERROR";
+
+    /// <summary>
+    /// El cliente envió un <c>engineVersion</c> no soportado (ni <c>"1.0.0"</c> ni
+    /// <c>"2.0.0"</c>). 400 — el cliente debe corregir el header / query param.
+    /// </summary>
+    public const string UnsupportedEngineVersion = "IMPORT_UNSUPPORTED_ENGINE_VERSION";
 }

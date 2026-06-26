@@ -1,7 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using BuildCv.Api.Contracts;
+using BuildCv.Domain.Resumes;
 using DocumentFormat.OpenXml.Packaging;
 using FluentAssertions;
 using QuestPDF.Fluent;
@@ -17,6 +20,15 @@ using QuestPDFDocument = QuestPDF.Fluent.Document;
 
 namespace BuildCv.Api.IntegrationTests;
 
+internal static class ImportResponseJson
+{
+    public static readonly JsonSerializerOptions Options = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
+}
+
 public sealed class ImportEndpointTests(CustomWebApplicationFactory factory)
     : IClassFixture<CustomWebApplicationFactory>
 {
@@ -27,7 +39,7 @@ public sealed class ImportEndpointTests(CustomWebApplicationFactory factory)
     {
         var pdfBytes = CreatePdfWithSections();
 
-        var content = BuildMultipart(pdfBytes, "application/pdf", "cv.pdf");
+        var content = BuildMultipart(pdfBytes, "application/pdf", "cv.pdf", engineVersion: "1.0.0");
 
         var response = await _client.PostAsync("/api/v1/import", content);
 
@@ -46,7 +58,7 @@ public sealed class ImportEndpointTests(CustomWebApplicationFactory factory)
     {
         var docxBytes = CreateDocxWithSections();
 
-        var content = BuildMultipart(docxBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "cv.docx");
+        var content = BuildMultipart(docxBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "cv.docx", engineVersion: "1.0.0");
 
         var response = await _client.PostAsync("/api/v1/import", content);
 
@@ -55,6 +67,94 @@ public sealed class ImportEndpointTests(CustomWebApplicationFactory factory)
         body.Should().NotBeNull();
         body!.Text.Should().Contain("EXPERIENCIA");
         body.Text.Should().Contain("EDUCACIÓN");
+    }
+
+    // =====================================================================
+    // PR 2e — engineVersion negotiation: default v2.0.0, header/query v1.0.0,
+    // unknown engineVersion → 400. Response shape changes to ImportResponseV2Dto.
+    // =====================================================================
+
+    [Fact]
+    public async Task Post_With_EngineVersion_Header_2_0_0_Returns_ImportResultV2_With_CvDocument()
+    {
+        var pdfBytes = CreatePdfWithSections();
+
+        var content = BuildMultipart(pdfBytes, "application/pdf", "cv.pdf", engineVersion: "2.0.0");
+
+        var response = await _client.PostAsync("/api/v1/import", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<ImportResponseV2Dto>(ImportResponseJson.Options);
+        body.Should().NotBeNull();
+        body!.EngineVersion.Should().Be("2.0.0");
+        body.TraceId.Should().NotBeNullOrWhiteSpace();
+        body.Cv.Should().NotBeNull();
+        body.Cv.Basics.Should().NotBeNull();
+        body.Cv.Meta.EngineVersion.Should().Be("2.0.0");
+    }
+
+    [Fact]
+    public async Task Post_Without_EngineVersion_Defaults_To_2_0_0_Returns_ImportResultV2()
+    {
+        var pdfBytes = CreatePdfWithSections();
+
+        var content = BuildMultipart(pdfBytes, "application/pdf", "cv.pdf");
+
+        var response = await _client.PostAsync("/api/v1/import", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<ImportResponseV2Dto>(ImportResponseJson.Options);
+        body.Should().NotBeNull();
+        body!.EngineVersion.Should().Be("2.0.0");
+        body.Cv.Should().NotBeNull();
+        body.Cv.Meta.EngineVersion.Should().Be("2.0.0");
+    }
+
+    [Fact]
+    public async Task Post_With_EngineVersion_Header_1_0_0_Returns_Legacy_ImportResult()
+    {
+        var pdfBytes = CreatePdfWithSections();
+
+        var content = BuildMultipart(pdfBytes, "application/pdf", "cv.pdf", engineVersion: "1.0.0");
+
+        var response = await _client.PostAsync("/api/v1/import", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<ImportResponseDto>();
+        body.Should().NotBeNull();
+        body!.Text.Should().Contain("EXPERIENCIA");
+        body.EngineVersion.Should().Be("1.0.0");
+        body.Sections.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task Post_With_EngineVersion_Query_1_0_0_Returns_Legacy_ImportResult()
+    {
+        var pdfBytes = CreatePdfWithSections();
+
+        var content = BuildMultipart(pdfBytes, "application/pdf", "cv.pdf", engineVersion: "1.0.0");
+
+        var response = await _client.PostAsync("/api/v1/import?engineVersion=1.0.0", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<ImportResponseDto>();
+        body.Should().NotBeNull();
+        body!.Text.Should().Contain("EXPERIENCIA");
+        body.EngineVersion.Should().Be("1.0.0");
+    }
+
+    [Fact]
+    public async Task Post_With_Unknown_EngineVersion_Returns_400()
+    {
+        var pdfBytes = CreatePdfWithSections();
+
+        var content = BuildMultipart(pdfBytes, "application/pdf", "cv.pdf", engineVersion: "9.9.9");
+
+        var response = await _client.PostAsync("/api/v1/import", content);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var raw = await response.Content.ReadAsStringAsync();
+        raw.Should().Contain("IMPORT_UNSUPPORTED_ENGINE_VERSION");
     }
 
     [Fact]
@@ -127,12 +227,16 @@ public sealed class ImportEndpointTests(CustomWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.UnsupportedMediaType);
     }
 
-    private static MultipartFormDataContent BuildMultipart(byte[] bytes, string mime, string fileName)
+    private static MultipartFormDataContent BuildMultipart(byte[] bytes, string mime, string fileName, string? engineVersion = null)
     {
         var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(bytes);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue(mime);
         content.Add(fileContent, "file", fileName);
+        if (engineVersion is not null)
+        {
+            content.Headers.TryAddWithoutValidation("X-Engine-Version", engineVersion);
+        }
         return content;
     }
 

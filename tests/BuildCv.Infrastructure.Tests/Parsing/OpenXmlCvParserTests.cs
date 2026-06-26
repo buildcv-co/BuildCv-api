@@ -21,12 +21,13 @@ public sealed class OpenXmlCvParserTests
 
         var result = _parser.Parse(command);
 
-        result.Text.Should().Contain("EXPERIENCIA");
-        result.Text.Should().Contain("EDUCACIÓN");
-        result.Text.Should().Contain("HABILIDADES");
-        result.EngineVersion.Should().Be("1.0.0");
-        result.TraceId.Should().Be("trace-1");
-        result.Sections.Select(s => s.Heading).Should().Contain("EXPERIENCIA");
+        var legacy = result.Should().BeOfType<LegacyImportResult>().Subject;
+        legacy.Text.Should().Contain("EXPERIENCIA");
+        legacy.Text.Should().Contain("EDUCACIÓN");
+        legacy.Text.Should().Contain("HABILIDADES");
+        legacy.EngineVersion.Should().Be("1.0.0");
+        legacy.TraceId.Should().Be("trace-1");
+        legacy.Sections.Select(s => s.Heading).Should().Contain("EXPERIENCIA");
     }
 
     [Fact]

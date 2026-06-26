@@ -8,6 +8,7 @@ using BuildCv.Api.Health;
 using BuildCv.Api.Security;
 using BuildCv.Application;
 using BuildCv.Application.Common;
+using BuildCv.Application.Features.Scoring;
 using BuildCv.Infrastructure;
 using BuildCv.Infrastructure.FeatureFlags;
 using BuildCv.Infrastructure.Persistence;
@@ -90,6 +91,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    options.SerializerOptions.Converters.Add(new ScoreCvCommandJsonConverter());
 });
 
 var jwtSigningKey = builder.Configuration["Jwt:SigningKey"] ?? "default-dev-signing-key-that-is-long-enough-for-hmac-sha256!";

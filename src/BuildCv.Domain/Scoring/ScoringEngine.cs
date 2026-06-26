@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 using BuildCv.Domain.Jobs;
 using BuildCv.Domain.Lexicon;
 using BuildCv.Domain.Resumes;
@@ -11,7 +15,22 @@ namespace BuildCv.Domain.Scoring;
 /// </summary>
 public sealed class ScoringEngine(ISkillMatcher matcher, ISkillGazetteer gazetteer) : IScoringEngine
 {
-    public const string Version = "1.0.0";
+    /// <summary>Versión actual del motor sellada en cada <see cref="ScoreResult"/>
+    /// (Constitution Art. II FR-006: bumpear SemVer cuando cambie la fórmula).
+    /// PR 3c selló el bump a <c>2.0.0</c> al introducir <see cref="ScoreV2"/>;
+    /// <see cref="VersionV1"/> queda para clientes que aún pidan la línea
+    /// legacy por contrato.</summary>
+    public const string Version = "2.0.0";
+
+    /// <summary>Versión del motor v1 (legacy). Se usa en <see cref="ScoreV2"/>
+    /// cuando un consumidor con <c>engineVersion: "1.0.0"</c> recibe un
+    /// sobre v2 por error de ruteo, y para compatibilidad de logs.</summary>
+    public const string VersionV1 = "1.0.0";
+
+    /// <summary>Versión del motor v2. Se sella en el contrato de respuesta
+    /// (<see cref="ScoreResultV2.EngineVersion"/>). Constante pública para que
+    /// las pruebas y los consumidores puedan fijarlo sin ambigüedad.</summary>
+    public const string VersionV2 = "2.0.0";
 
     private const string DisclaimerText =
         "Este puntaje mide coincidencia con esta vacante y legibilidad para sistemas automáticos. " +
@@ -24,6 +43,24 @@ public sealed class ScoringEngine(ISkillMatcher matcher, ISkillGazetteer gazette
     private const double WLength = 0.05;
     private const double FormatMeasurabilityV0 = 0.5;
     private const double FormatBaselineV0 = 0.75;
+
+    private const double WExperience = 0.40;
+    private const double WEducation = 0.20;
+    private const double WSkills = 0.30;
+    private const double WContact = 0.10;
+
+    private const int GapThresholdMonths = 6;
+    private const int JobHoppingWindowYears = 2;
+    private const int JobHoppingMaxEmployers = 3;
+    private const int SkillMismatchThresholdPct = 50;
+
+    private static readonly Regex EmailRegex = new(
+        @"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+        RegexOptions.Compiled);
+
+    private static readonly Regex PhoneDigitsRegex = new(@"\d", RegexOptions.Compiled);
+
+    private static readonly Regex TokenSplitRegex = new(@"[^a-z0-9]+", RegexOptions.Compiled);
 
     public ScoreResult Score(JobRequirementSet job, CvAnalysis cv)
     {
@@ -56,7 +93,7 @@ public sealed class ScoringEngine(ISkillMatcher matcher, ISkillGazetteer gazette
             BuildRecommendations(job, matches, cv),
             BuildFormatIssues(cv),
             gates,
-            Version,
+            VersionV1,
             gazetteer.Version,
             job.ContextHash);
     }
@@ -319,4 +356,441 @@ public sealed class ScoringEngine(ISkillMatcher matcher, ISkillGazetteer gazette
 
     private static string LengthSummary(CvAnalysis cv)
         => $"{cv.WordCount} palabras.";
+
+    /// <summary>
+    /// Motor de puntaje v2 (PR 3b): consume <see cref="CvDocument"/> y
+    /// <see cref="JobInput"/> directamente, sin regex sobre texto pegado
+    /// (Constitution Art. II FR-037). Función pura: sin IO, sin
+    /// <c>DateTime.UtcNow</c>, sin <c>Guid.NewGuid</c>, sin <c>Random</c>;
+    /// mismo input + misma versión ⇒ mismo score (verificado en PR 3d
+    /// con 1000 ejecuciones paralelas).
+    /// <para>
+    /// Hard-gate por email ausente (FR-018): si <c>cv.Basics.Email</c> no
+    /// pasa la regex, <c>overallScore = 0</c>, <c>band = "Bajo"</c>, y se
+    /// emite red flag <c>MISSING_EMAIL</c>. Las demás secciones se siguen
+    /// calculando para diagnóstico, pero no alimentan el overall.
+    /// </para>
+    /// <para>
+    /// Overall = promedio ponderado 0.40·experience + 0.20·education +
+    /// 0.30·skills + 0.10·contact; <c>certifications</c> viaja en
+    /// <c>perSection</c> como señal informativa pero no entra al overall.
+    /// Band: <c>Bajo</c> &lt;40, <c>Medio</c> 40–69, <c>Alto</c> ≥70.
+    /// </para>
+    /// </summary>
+    public static ScoreResultV2 ScoreV2(CvDocument cv, JobInput job)
+    {
+        ArgumentNullException.ThrowIfNull(cv);
+        ArgumentNullException.ThrowIfNull(job);
+
+        var redFlags = new List<RedFlag>();
+
+        if (!IsValidEmail(cv.Basics.Email))
+        {
+            redFlags.Add(new RedFlag(
+                "MISSING_EMAIL",
+                RedFlagSeverity.High,
+                "El CV no tiene un correo electrónico válido; el puntaje se detiene en cero."));
+
+            var legacyZero = BuildLegacyZero(cv, job, redFlags);
+            return new ScoreResultV2
+            {
+                Legacy = legacyZero,
+                PerSection = new PerSectionScore()
+                    .WithExperience(0)
+                    .WithEducation(0)
+                    .WithSkills(0)
+                    .WithCertifications(0)
+                    .WithContact(0),
+                RedFlags = redFlags,
+            };
+        }
+
+        if (!IsValidPhone(cv.Basics.Phone))
+        {
+            redFlags.Add(new RedFlag(
+                "MISSING_PHONE",
+                RedFlagSeverity.Low,
+                "No detectamos un teléfono válido; algunos reclutadores no podrán contactarte."));
+        }
+
+        var relevantJobs = CountRelevantJobs(cv.Work, job.Title);
+        var experienceScore = relevantJobs switch
+        {
+            >= 3 => 95,
+            2 => 80,
+            1 => 60,
+            _ => 30,
+        };
+
+        var educationScore = ComputeEducationScore(cv.Education, job.Requirements);
+
+        var skillCoverage = ComputeSkillCoverage(cv.Skills, job.Requirements);
+        var skillsScore = job.Requirements.Count == 0
+            ? Math.Max(CountCertificates(cv.Certificates) * 25, 50)
+            : (int)Math.Round(skillCoverage);
+
+        if (job.Requirements.Count > 0 && skillCoverage < SkillMismatchThresholdPct)
+        {
+            redFlags.Add(new RedFlag(
+                "SKILL_MISMATCH",
+                RedFlagSeverity.Medium,
+                $"Cubres menos del {SkillMismatchThresholdPct}% de los requisitos técnicos de la vacante."));
+        }
+
+        var certificationsScore = Math.Min(100, CountCertificates(cv.Certificates) * 50);
+
+        var contactScore = ComputeContactScore(cv.Basics);
+
+        var gap = DetectEmploymentGap(cv.Work);
+        if (gap.HasValue)
+        {
+            redFlags.Add(new RedFlag(
+                "EMPLOYMENT_GAP",
+                RedFlagSeverity.Medium,
+                $"Hay un vacío laboral de {gap.Value} meses entre dos experiencias consecutivas."));
+        }
+
+        if (DetectJobHopping(cv.Work))
+        {
+            redFlags.Add(new RedFlag(
+                "JOB_HOPPING",
+                RedFlagSeverity.Low,
+                $"Más de {JobHoppingMaxEmployers} empleadores en los últimos {JobHoppingWindowYears} años del CV."));
+        }
+
+        var overall = (int)Math.Round(
+            (experienceScore * WExperience)
+            + (educationScore * WEducation)
+            + (skillsScore * WSkills)
+            + (contactScore * WContact));
+        overall = Math.Clamp(overall, PerSectionScore.Min, PerSectionScore.Max);
+
+        var band = ToV2Band(overall);
+
+        var perSection = new PerSectionScore()
+            .WithExperience(experienceScore)
+            .WithEducation(educationScore)
+            .WithSkills(skillsScore)
+            .WithCertifications(certificationsScore)
+            .WithContact(contactScore);
+
+        var legacy = new ScoreResult(
+            Overall: overall,
+            Band: band,
+            Disclaimer: DisclaimerText,
+            Components: Array.Empty<ComponentScore>(),
+            Keywords: new KeywordAnalysis(
+                Array.Empty<KeywordView>(),
+                Array.Empty<KeywordView>(),
+                Array.Empty<KeywordView>()),
+            Recommendations: Array.Empty<Recommendation>(),
+            FormatIssues: Array.Empty<FormatIssue>(),
+            GatesApplied: Array.Empty<GateApplied>(),
+            EngineVersion: VersionV2,
+            LexiconVersion: VersionV2,
+            ContextHash: ComputeV2ContextHash(cv, job));
+
+        return new ScoreResultV2
+        {
+            Legacy = legacy,
+            PerSection = perSection,
+            RedFlags = redFlags,
+        };
+    }
+
+    private static bool IsValidEmail(string? email)
+        => !string.IsNullOrWhiteSpace(email) && EmailRegex.IsMatch(email);
+
+    private static bool IsValidPhone(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            return false;
+        }
+
+        return PhoneDigitsRegex.Matches(phone).Count >= 10;
+    }
+
+    private static int CountRelevantJobs(IReadOnlyList<TaggedResumeWork> work, string jobTitle)
+    {
+        if (work.Count == 0)
+        {
+            return 0;
+        }
+
+        var jobTokens = Tokenize(jobTitle);
+        if (jobTokens.Count == 0)
+        {
+            return 0;
+        }
+
+        var hits = 0;
+        foreach (var entry in work)
+        {
+            var entryTokens = Tokenize($"{entry.Entry.Position} {entry.Entry.Name}");
+            if (jobTokens.Any(token => entryTokens.Contains(token)))
+            {
+                hits++;
+            }
+        }
+
+        return hits;
+    }
+
+    private static int ComputeEducationScore(
+        IReadOnlyList<TaggedResumeEducation> education,
+        IReadOnlyList<string> requirements)
+    {
+        if (education.Count == 0)
+        {
+            return 0;
+        }
+
+        var requirementTokens = requirements
+            .SelectMany(Tokenize)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var hasOverlap = education.Any(entry =>
+        {
+            var entryTokens = Tokenize(
+                $"{entry.Entry.Institution} {entry.Entry.Area} {entry.Entry.StudyType}");
+            return entryTokens.Any(requirementTokens.Contains);
+        });
+
+        return hasOverlap ? 90 : 60;
+    }
+
+    private static double ComputeSkillCoverage(
+        IReadOnlyList<TaggedResumeSkill> skills,
+        IReadOnlyList<string> requirements)
+    {
+        if (requirements.Count == 0)
+        {
+            return 0;
+        }
+
+        var requirementTokens = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var requirement in requirements)
+        {
+            foreach (var token in Tokenize(requirement))
+            {
+                requirementTokens.Add(token);
+            }
+        }
+
+        if (requirementTokens.Count == 0)
+        {
+            return 0;
+        }
+
+        var skillTokens = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var skill in skills)
+        {
+            foreach (var token in Tokenize(skill.Entry.Name))
+            {
+                skillTokens.Add(token);
+            }
+        }
+
+        var matched = 0;
+        foreach (var token in requirementTokens)
+        {
+            if (skillTokens.Contains(token))
+            {
+                matched++;
+            }
+        }
+
+        return 100.0 * matched / requirementTokens.Count;
+    }
+
+    private static int CountCertificates(IReadOnlyList<TaggedResumeCertificate> certificates)
+        => certificates.Count;
+
+    private static int ComputeContactScore(Basics basics)
+    {
+        var hasEmail = IsValidEmail(basics.Email);
+        var hasPhone = IsValidPhone(basics.Phone);
+        var hasUrl = !string.IsNullOrWhiteSpace(basics.Url);
+
+        if (hasEmail && hasPhone && hasUrl)
+        {
+            return 100;
+        }
+
+        if (hasEmail && hasPhone)
+        {
+            return 70;
+        }
+
+        if (hasEmail)
+        {
+            return 40;
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Detecta el mayor vacío laboral en meses entre dos experiencias
+    /// consecutivas. Devuelve <c>null</c> si no hay vacío mayor al umbral.
+    /// Puro: solo compara <c>StartDate</c>/<c>EndDate</c> (formato
+    /// <c>YYYY-MM</c>), sin reloj de pared.
+    /// </summary>
+    private static int? DetectEmploymentGap(IReadOnlyList<TaggedResumeWork> work)
+    {
+        if (work.Count < 2)
+        {
+            return null;
+        }
+
+        var dated = work
+            .Where(entry => TryParseYearMonth(entry.Entry.StartDate, out _))
+            .OrderBy(entry => entry.Entry.StartDate, StringComparer.Ordinal)
+            .ToList();
+
+        if (dated.Count < 2)
+        {
+            return null;
+        }
+
+        int? largestGap = null;
+        for (var i = 1; i < dated.Count; i++)
+        {
+            var previous = dated[i - 1];
+            var current = dated[i];
+            if (!TryParseYearMonth(previous.Entry.EndDate, out var previousEnd))
+            {
+                continue;
+            }
+
+            if (!TryParseYearMonth(current.Entry.StartDate, out var currentStart))
+            {
+                continue;
+            }
+
+            var months = (currentStart.Year - previousEnd.Year) * 12
+                + (currentStart.Month - previousEnd.Month);
+
+            if (months > GapThresholdMonths)
+            {
+                largestGap = largestGap.HasValue ? Math.Max(largestGap.Value, months) : months;
+            }
+        }
+
+        return largestGap;
+    }
+
+    /// <summary>
+    /// Detecta el patrón de "job hopping": más de
+    /// <see cref="JobHoppingMaxEmployers"/> empleadores distintos cuyos
+    /// <c>StartDate</c> caen en la ventana de
+    /// <see cref="JobHoppingWindowYears"/> años contados desde la fecha de
+    /// inicio más reciente del CV. Puro: ancla en <c>max(StartDate)</c>,
+    /// sin <c>DateTime.UtcNow</c>.
+    /// </summary>
+    private static bool DetectJobHopping(IReadOnlyList<TaggedResumeWork> work)
+    {
+        if (work.Count <= JobHoppingMaxEmployers)
+        {
+            return false;
+        }
+
+        var dated = work
+            .Where(entry => TryParseYearMonth(entry.Entry.StartDate, out _))
+            .ToList();
+
+        if (dated.Count <= JobHoppingMaxEmployers)
+        {
+            return false;
+        }
+
+        var anchor = dated.Max(entry =>
+            ParseYearMonth(entry.Entry.StartDate));
+
+        var windowStart = anchor.AddYears(-JobHoppingWindowYears);
+        var inWindow = dated.Count(entry => ParseYearMonth(entry.Entry.StartDate) >= windowStart);
+
+        return inWindow > JobHoppingMaxEmployers;
+    }
+
+    private static ScoreBand ToV2Band(int overall) => overall switch
+    {
+        < 40 => ScoreBand.Bajo,
+        < 70 => ScoreBand.Medio,
+        _ => ScoreBand.Alto,
+    };
+
+    private static ScoreResult BuildLegacyZero(CvDocument cv, JobInput job, IReadOnlyList<RedFlag> redFlags) =>
+        new(
+            Overall: 0,
+            Band: ScoreBand.Bajo,
+            Disclaimer: DisclaimerText,
+            Components: Array.Empty<ComponentScore>(),
+            Keywords: new KeywordAnalysis(
+                Array.Empty<KeywordView>(),
+                Array.Empty<KeywordView>(),
+                Array.Empty<KeywordView>()),
+            Recommendations: Array.Empty<Recommendation>(),
+            FormatIssues: Array.Empty<FormatIssue>(),
+            GatesApplied: Array.Empty<GateApplied>(),
+            EngineVersion: VersionV2,
+            LexiconVersion: VersionV2,
+            ContextHash: ComputeV2ContextHash(cv, job));
+
+    private static string ComputeV2ContextHash(CvDocument cv, JobInput job)
+    {
+        var canonical = string.Join(
+            "|",
+            "v2",
+            cv.Basics.Email,
+            cv.Work.Count.ToString(CultureInfo.InvariantCulture),
+            cv.Education.Count.ToString(CultureInfo.InvariantCulture),
+            cv.Skills.Count.ToString(CultureInfo.InvariantCulture),
+            cv.Certificates.Count.ToString(CultureInfo.InvariantCulture),
+            job.Title,
+            string.Join(",", job.Requirements.OrderBy(r => r, StringComparer.Ordinal)));
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
+        return Convert.ToHexStringLower(hash);
+    }
+
+    private static IReadOnlyList<string> Tokenize(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return Array.Empty<string>();
+        }
+
+        var lower = text.ToLowerInvariant();
+        var raw = TokenSplitRegex.Split(lower);
+        var tokens = new List<string>(raw.Length);
+        foreach (var token in raw)
+        {
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                tokens.Add(token);
+            }
+        }
+
+        return tokens;
+    }
+
+    private static bool TryParseYearMonth(string? value, out DateTime result)
+    {
+        result = default;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return DateTime.TryParseExact(
+            value,
+            "yyyy-MM",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out result);
+    }
+
+    private static DateTime ParseYearMonth(string value)
+        => DateTime.ParseExact(value, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None);
 }

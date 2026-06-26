@@ -17,6 +17,10 @@ public enum ScoreBand
     Medio,
     Bueno,
     Fuerte,
+    /// <summary>Banda alta del motor v2 (3-band Bajo/Medio/Alto ≥ 70).
+    /// Anexada al final para preservar el ordinal de los valores previos
+    /// y no invalidar serializaciones existentes (Constitution Art. VI).</summary>
+    Alto,
 }
 
 /// <summary>Subpuntaje de un componente con su peso, medibilidad y confianza.</summary>

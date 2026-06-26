@@ -46,6 +46,8 @@ Esta Constitución fija las **reglas duras innegociables** del proyecto. Son pri
 - El sistema **MUST** descomponer el puntaje en componentes ponderados y mostrar el subpuntaje y el peso de cada uno *(FR-007)*, haciendo cada porción **explicable** mediante atribución a reglas concretas *(FR-008)*.
 - El sistema **MUST** declarar la medibilidad parcial de un componente cuando la entrada no permite observarlo (p. ej. formato con solo texto pegado en v0), excluyéndolo y renormalizando para no premiar ni castigar lo no evaluado *(FR-011)*.
 - El sistema **MUST** sellar cada resultado con la versión del motor de puntaje y de sus léxicos para garantizar comparaciones válidas en el tiempo *(FR-013)*.
+
+> **SemVer bump note (added 2026-06-26, 021-structured-cv-import-and-job-input):** La regla anterior se materializó con un bump MAYOR `1.0.0 → 2.0.0` en `ScoringEngine.Version` como parte del cambio `021-structured-cv-import-and-job-input` (per-section breakdown + `redFlags` + entrada tipada `CvDocument` / `JobSpec`). El sello `engineVersion: "2.0.0"` se incluye en cada `ScoreResponse` (v2) y `ImportResult` (v2); el contrato v1 (`"1.0.0"`) sigue alcanzable vía `engineVersion` explícito por un ciclo de release (shim con discriminated-union `ScoreCvCommand`). Sin enmienda constitucional — el bump es la materialización contractual de la regla existente.
 - El LLM **MUST NOT** calcular el puntaje, el conteo de keywords ni el conteo de invenciones; **MAY** explicar o sugerir en texto visible, claramente separado del número *(FR-020, NFR-021)*.
 - El motor de puntaje **MUST** ser una función pura: sin IO, red, reloj ni aleatoriedad en la ruta de cálculo del número.
 

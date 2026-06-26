@@ -162,9 +162,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("frontend");
+app.UseMiddleware<BuildCv.Api.Auth.LocalAuthMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseMiddleware<BuildCv.Api.Auth.LocalAuthMiddleware>();
 app.UseRateLimiter();
 
 app.MapHealthEndpoints();

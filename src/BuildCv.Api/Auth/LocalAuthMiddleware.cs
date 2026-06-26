@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using BuildCv.Application.Common;
 using BuildCv.Application.Features.Auth;
+using BuildCv.Application.Features.Credits;
 using BuildCv.Domain.Auth;
+using BuildCv.Domain.Credits;
 using Microsoft.Extensions.Options;
 
 namespace BuildCv.Api.Auth;
@@ -22,7 +24,7 @@ public sealed class LocalAuthMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, IUserDataStore userStore)
+    public async Task InvokeAsync(HttpContext context, IUserDataStore userStore, ICreditLedger ledger)
     {
         if (!_options.Enabled)
         {
@@ -30,7 +32,7 @@ public sealed class LocalAuthMiddleware
             return;
         }
 
-        await EnsureLocalUserAsync(userStore, context.RequestAborted);
+        await EnsureLocalUserAsync(userStore, ledger, context.RequestAborted);
 
         if (context.User.Identity?.IsAuthenticated != true)
         {
@@ -49,30 +51,16 @@ public sealed class LocalAuthMiddleware
         await _next(context);
     }
 
-    private async Task EnsureLocalUserAsync(IUserDataStore userStore, CancellationToken ct)
+    private async Task EnsureLocalUserAsync(IUserDataStore userStore, ICreditLedger ledger, CancellationToken ct)
     {
         var existingResult = await userStore.GetByIdAsync(_options.UserId, ct);
         if (existingResult.IsSuccess)
         {
-            var existing = existingResult.Value;
-            if (existing.CreditBalance < _options.InitialCredits)
-            {
-                _logger.LogInformation(
-                    "Refilling local user credits from {Current} to {Initial}",
-                    existing.CreditBalance,
-                    _options.InitialCredits);
-                await userStore.UpsertAsync(
-                    existing with { CreditBalance = _options.InitialCredits, LastLoginAt = DateTime.UtcNow },
-                    ct);
-            }
-            else
-            {
-                await userStore.UpsertAsync(existing with { LastLoginAt = DateTime.UtcNow }, ct);
-            }
+            await userStore.UpsertAsync(existingResult.Value with { LastLoginAt = DateTime.UtcNow }, ct);
             return;
         }
 
-        _logger.LogInformation("Creating local user {UserId}", _options.UserId);
+        _logger.LogInformation("Creating local user {UserId} with {Credits} initial credits", _options.UserId, _options.InitialCredits);
         await userStore.UpsertAsync(
             new User
             {
@@ -83,8 +71,17 @@ public sealed class LocalAuthMiddleware
                 Name = _options.Name,
                 CreatedAt = DateTime.UtcNow,
                 LastLoginAt = DateTime.UtcNow,
-                CreditBalance = _options.InitialCredits,
+                CreditBalance = 0,
             },
             ct);
+
+        await ledger.AccreditAsync(
+            userId: _options.UserId,
+            reason: CreditLedgerReason.Welcome,
+            reference: $"local-welcome:{_options.UserId}",
+            delta: _options.InitialCredits,
+            balanceAfter: _options.InitialCredits,
+            metadata: "Local dev initial credits",
+            ct: ct);
     }
 }

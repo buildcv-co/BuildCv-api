@@ -1,4 +1,5 @@
 using BuildCv.Domain.Common;
+using BuildCv.Domain.Resumes;
 using FluentValidation;
 
 namespace BuildCv.Application.Features.Import;
@@ -7,12 +8,12 @@ namespace BuildCv.Application.Features.Import;
 /// Orquesta el flujo de import:
 /// 1. Valida el comando con FluentValidation (nombre no vacío, mime pdf/docx).
 /// 2. Llama al <see cref="IParserRouter"/> (micro-batch 2d de 021) que despacha por
-///    <c>command.EngineVersion</c>: <c>1.0.0</c> → legacy (RawParseResult), <c>2.0.0</c> →
-///    estructurado (StructuredParseResult).
-/// 3. Adapta el <see cref="ParseResult"/> discriminated union al contrato legacy
-///    <see cref="ImportResult"/> mientras el endpoint se migra a <c>engineVersion 2.0.0</c>
-///    en el micro-batch 2e de 021. La adaptación es pura (sin IO/reloj/aleatoriedad) —
-///    Constitution Art. II (determinista y explicable).
+///    <c>command.EngineVersion</c>: <c>1.0.0</c> → legacy (<see cref="RawParseResult"/>),
+///    <c>2.0.0</c> → estructurado (<see cref="StructuredParseResult"/>).
+/// 3. Mapea cada variante del <see cref="ParseResult"/> discriminated union al contrato
+///    apropiado: <see cref="LegacyImportResult"/> para v1, <see cref="StructuredImportResult"/>
+///    para v2. El discriminador <see cref="ImportResult.EngineVersion"/> queda sellado
+///    en cada variante (Constitution Art. II — SemVer estable).
 /// 4. Mapea excepciones tipadas a errores de dominio estables.
 /// 5. Devuelve <c>Result&lt;ImportResult&gt;</c>.
 ///
@@ -45,8 +46,8 @@ public sealed class ImportCvHandler
         try
         {
             var parseResult = _router.Parse(command);
-            var legacyResult = AdaptToLegacy(parseResult, command);
-            return Task.FromResult(Result.Success(legacyResult));
+            var result = MapToImportResult(parseResult, command.TraceId);
+            return Task.FromResult(Result.Success(result));
         }
         catch (ParserEngineException ex)
         {
@@ -61,41 +62,26 @@ public sealed class ImportCvHandler
     }
 
     /// <summary>
-    /// Adapta el <see cref="ParseResult"/> v2 al contrato legacy <see cref="ImportResult"/>
-    /// mientras el endpoint se migra (micro-batch 2e). Para <see cref="StructuredParseResult"/>
-    /// se serializa el <c>CvDocument</c> como texto plano vía un renderizador
-    /// determinista (preservando Constitution Art. I: cero invención — sólo lo que está
-    /// en el CV original). Para <see cref="RawParseResult"/> se mapea 1:1.
-    ///
-    /// Las <see cref="ImportSection"/> se recomputan con <see cref="SectionDetector"/>
-    /// sobre el texto extraído — preservando el comportamiento del router legacy
-    /// (micro-batch 2a de 021) que también las calculaba como heurística.
-    ///
-    /// TODO(021/2e): retirar este shim cuando el endpoint consuma directamente
-    /// <see cref="ParseResult"/> (PR 2e de 021).
+    /// Mapea cada variante del <see cref="ParseResult"/> discriminated union al
+    /// <see cref="ImportResult"/> apropiado. Esta función es pura (sin IO, sin reloj,
+    /// sin aleatoriedad) — Constitution Art. II.
     /// </summary>
-    private static ImportResult AdaptToLegacy(ParseResult result, ImportCvCommand command)
+    private static ImportResult MapToImportResult(ParseResult parseResult, string traceId)
     {
-        var (text, sections, warnings, engineVersion) = result switch
+        return parseResult switch
         {
-            RawParseResult raw => (
-                raw.Text,
-                SectionDetector.Detect(raw.Text),
-                raw.Warnings,
-                raw.EngineVersion),
-
-            StructuredParseResult structured => (
-                RenderStructuredAsText(structured.Cv),
-                Array.Empty<ImportSection>(),
-                structured.Warnings,
-                structured.EngineVersion),
-
+            RawParseResult raw => MapLegacy(raw, traceId),
+            StructuredParseResult structured => MapStructured(structured, traceId),
             _ => throw new InvalidOperationException(
-                $"Variante de ParseResult desconocida: {result.GetType().FullName}."),
+                $"Variante de ParseResult desconocida: {parseResult.GetType().FullName}."),
         };
+    }
 
-        var warningsList = new List<ImportWarning>(ConvertWarnings(warnings));
-        if (sections.Count == 0 && engineVersion == "1.0.0" && warningsList.All(w => w.Code != "NO_SECTIONS_DETECTED"))
+    private static LegacyImportResult MapLegacy(RawParseResult raw, string traceId)
+    {
+        var sections = SectionDetector.Detect(raw.Text);
+        var warningsList = new List<ImportWarning>(ConvertWarnings(raw.Warnings));
+        if (sections.Count == 0 && warningsList.All(w => w.Code != "NO_SECTIONS_DETECTED"))
         {
             warningsList.Add(new ImportWarning(
                 "NO_SECTIONS_DETECTED",
@@ -103,77 +89,19 @@ public sealed class ImportCvHandler
                 "Info"));
         }
 
-        return new ImportResult(
-            Text: text,
-            Sections: sections,
-            Warnings: warningsList,
-            EngineVersion: engineVersion,
-            TraceId: command.TraceId);
+        return new LegacyImportResult(
+            text: raw.Text,
+            sections: sections,
+            warnings: warningsList,
+            traceId: traceId);
     }
 
-    private static string RenderStructuredAsText(BuildCv.Domain.Resumes.CvDocument cv)
+    private static StructuredImportResult MapStructured(StructuredParseResult structured, string traceId)
     {
-        var sb = new System.Text.StringBuilder();
-        var basics = cv.Basics;
-
-        if (!string.IsNullOrWhiteSpace(basics.Name))
-        {
-            sb.AppendLine(basics.Name);
-        }
-
-        var contact = string.Join(" | ",
-            new[] { basics.Email, basics.Phone, basics.Url }
-                .Where(s => !string.IsNullOrWhiteSpace(s)));
-        if (contact.Length > 0)
-        {
-            sb.AppendLine(contact);
-        }
-
-        foreach (var profile in basics.Profiles)
-        {
-            sb.AppendLine($"{profile.Network}: {profile.Url}");
-        }
-
-        if (cv.Work.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("EXPERIENCIA");
-            foreach (var work in cv.Work)
-            {
-                sb.AppendLine($"{work.Entry.Name} — {work.Entry.Position} ({work.Entry.StartDate} – {work.Entry.EndDate ?? "actualidad"})");
-                if (!string.IsNullOrWhiteSpace(work.Entry.Summary))
-                {
-                    sb.AppendLine(work.Entry.Summary);
-                }
-
-                if (work.Entry.Highlights is not null)
-                {
-                    foreach (var highlight in work.Entry.Highlights)
-                    {
-                        sb.AppendLine($"  • {highlight}");
-                    }
-                }
-            }
-        }
-
-        if (cv.Education.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("EDUCACIÓN");
-            foreach (var edu in cv.Education)
-            {
-                sb.AppendLine($"{edu.Entry.Institution} — {edu.Entry.Area ?? edu.Entry.StudyType ?? string.Empty}");
-            }
-        }
-
-        if (cv.Skills.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("HABILIDADES");
-            sb.AppendLine(string.Join(", ", cv.Skills.Select(s => s.Entry.Name)));
-        }
-
-        return sb.ToString().Trim();
+        return new StructuredImportResult(
+            cv: structured.Cv,
+            warnings: structured.Warnings,
+            traceId: traceId);
     }
 
     private static IReadOnlyList<ImportWarning> ConvertWarnings(IReadOnlyList<ParsingWarning> source)

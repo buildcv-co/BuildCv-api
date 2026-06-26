@@ -23,9 +23,10 @@ public sealed class ImportCvHandlerTests
         var result = await handler.HandleAsync(command, CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.Text.Should().Be("Fake parsed text");
-        result.Value.EngineVersion.Should().Be("1.0.0");
-        result.Value.TraceId.Should().Be(TraceId);
+        var legacy = result.Value.Should().BeOfType<LegacyImportResult>().Subject;
+        legacy.Text.Should().Be("Fake parsed text");
+        legacy.EngineVersion.Should().Be("1.0.0");
+        legacy.TraceId.Should().Be(TraceId);
         router.Calls.Should().Be(1);
     }
 
@@ -44,9 +45,10 @@ public sealed class ImportCvHandlerTests
         var result = await handler.HandleAsync(command, CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.EngineVersion.Should().Be("2.0.0");
-        result.Value.TraceId.Should().Be(TraceId);
-        result.Value.Text.Should().Contain("Ada Lovelace");
+        var structured = result.Value.Should().BeOfType<StructuredImportResult>().Subject;
+        structured.EngineVersion.Should().Be("2.0.0");
+        structured.TraceId.Should().Be(TraceId);
+        structured.Cv.Basics.Name.Should().Be("Ada Lovelace");
         router.Calls.Should().Be(1);
     }
 

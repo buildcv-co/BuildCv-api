@@ -109,7 +109,13 @@ public sealed class LegacyParserAdapter : IStructuredParser
         ArgumentNullException.ThrowIfNull(command);
 
         var legacyResult = _legacy.Parse(command);
-        return new RawParseResult(legacyResult.Text, ConvertWarnings(legacyResult.Warnings));
+        if (legacyResult is not LegacyImportResult legacy)
+        {
+            throw new InvalidOperationException(
+                $"El parser legacy devolvió {legacyResult.GetType().FullName}; se esperaba LegacyImportResult.");
+        }
+
+        return new RawParseResult(legacy.Text, ConvertWarnings(legacy.Warnings));
     }
 
     private static IReadOnlyList<ParsingWarning> ConvertWarnings(IReadOnlyList<ImportWarning> legacy)

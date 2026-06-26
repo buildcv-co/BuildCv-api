@@ -11,6 +11,25 @@ public static class ImportEndpoints
     public const long MaxFileSizeBytes = 5 * 1024 * 1024;
     public const long MaxRequestBodyBytes = 6 * 1024 * 1024;
 
+    /// <summary>Header canónico para negociar la versión del motor de import.</summary>
+    public const string EngineVersionHeader = "X-Engine-Version";
+
+    /// <summary>Query param alternativo para clientes que no pueden setear headers.</summary>
+    public const string EngineVersionQueryParam = "engineVersion";
+
+    private static readonly HashSet<string> AllowedEngineVersions = new(StringComparer.Ordinal)
+    {
+        ImportResponseMapper.LegacyEngineVersion,
+        ImportResponseMapper.StructuredEngineVersion,
+    };
+
+    /// <summary>
+    /// Versión por defecto cuando el cliente no especifica (Constitution Art. II — el cambio
+    /// de versión debe ser explícito; este default aplica a clientes nuevos que ya hablan el
+    /// protocolo v2).
+    /// </summary>
+    private const string DefaultEngineVersion = ImportResponseMapper.StructuredEngineVersion;
+
     private static readonly HashSet<string> AllowedMimeTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "application/pdf",
@@ -66,6 +85,11 @@ public static class ImportEndpoints
                         new KeyValuePair<string, object?>("mimeDeclared", declaredMime)));
             }
 
+            if (!TryResolveEngineVersion(httpRequest, traceId, out var engineVersion, out var engineError))
+            {
+                return engineError!;
+            }
+
             await using var memoryStream = new MemoryStream(capacity: (int)file.Length);
             await using (var source = file.OpenReadStream())
             {
@@ -77,7 +101,8 @@ public static class ImportEndpoints
                 FileBytes: bytes,
                 MimeType: declaredMime,
                 OriginalFileName: string.IsNullOrWhiteSpace(file.FileName) ? "uploaded" : file.FileName,
-                TraceId: traceId);
+                TraceId: traceId,
+                EngineVersion: engineVersion);
 
             var stopwatch = Stopwatch.StartNew();
             var result = await handler.HandleAsync(command, ct);
@@ -90,12 +115,10 @@ public static class ImportEndpoints
             }
 
             logger.LogInformation(
-                "Import request (fileSize={FileSize}, mimeDeclared={MimeDeclared}, parseTimeMs={ParseMs}, sections={SectionCount}, warnings={WarningCount}, engineVersion={EngineVersion}, traceId={TraceId})",
+                "Import request (fileSize={FileSize}, mimeDeclared={MimeDeclared}, parseTimeMs={ParseMs}, engineVersion={EngineVersion}, traceId={TraceId})",
                 file.Length,
                 declaredMime,
                 stopwatch.ElapsedMilliseconds,
-                result.Value.Sections.Count,
-                result.Value.Warnings.Count,
                 result.Value.EngineVersion,
                 traceId);
 
@@ -107,6 +130,45 @@ public static class ImportEndpoints
         .WithDescription("Constitution Art. III (sin persistencia), Art. V (texto como DATO), Art. VI (puerto ICvParser), Art. VII (rate-limit 'import' 30/h).");
 
         return app;
+    }
+
+    /// <summary>
+    /// Resuelve la versión del motor solicitada por el cliente con esta precedencia:
+    /// <list type="number">
+    ///   <item>Query <c>?engineVersion=</c></item>
+    ///   <item>Header <c>X-Engine-Version</c></item>
+    ///   <item>Default <see cref="DefaultEngineVersion"/> (2.0.0)</item>
+    /// </list>
+    /// Si el cliente envía una versión no soportada, devuelve <c>400</c> con código
+    /// <c>IMPORT_UNSUPPORTED_ENGINE_VERSION</c> (Constitution Art. II — versión bumpeada por SemVer).
+    /// </summary>
+    private static bool TryResolveEngineVersion(
+        HttpRequest request,
+        string traceId,
+        out string engineVersion,
+        out IResult? errorResult)
+    {
+        var queryValue = request.Query[EngineVersionQueryParam].ToString();
+        var headerValue = request.Headers[EngineVersionHeader].ToString();
+        var raw = !string.IsNullOrWhiteSpace(queryValue) ? queryValue : headerValue;
+        var resolved = !string.IsNullOrWhiteSpace(raw) ? raw : DefaultEngineVersion;
+
+        if (!AllowedEngineVersions.Contains(resolved))
+        {
+            engineVersion = resolved;
+            errorResult = Problem(statusCode: StatusCodes.Status400BadRequest,
+                title: "Versión de motor no soportada",
+                detail: $"El engineVersion '{resolved}' no está soportado. Usa '{ImportResponseMapper.LegacyEngineVersion}' o '{ImportResponseMapper.StructuredEngineVersion}'.",
+                extensions: BuildCodeExtension(ImportErrorCodes.UnsupportedEngineVersion, traceId,
+                    new KeyValuePair<string, object?>("engineVersion", resolved),
+                    new KeyValuePair<string, object?>("supportedVersions",
+                        new[] { ImportResponseMapper.LegacyEngineVersion, ImportResponseMapper.StructuredEngineVersion })));
+            return false;
+        }
+
+        engineVersion = resolved;
+        errorResult = null;
+        return true;
     }
 
     private static IResult MapError(string code, string message, string traceId)

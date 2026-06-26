@@ -155,12 +155,11 @@ public sealed class OpenXmlCvParser : ICvParser, IStructuredParser, IKnownMimePa
                     "Info"));
             }
 
-            return new ImportResult(
+            return new LegacyImportResult(
                 text,
                 sections,
                 warnings,
-                EngineVersion: LegacyEngineVersion,
-                TraceId: command.TraceId);
+                command.TraceId);
         }
     }
 

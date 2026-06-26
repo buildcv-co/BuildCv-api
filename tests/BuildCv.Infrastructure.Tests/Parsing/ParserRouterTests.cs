@@ -210,12 +210,11 @@ public sealed class ParserRouterTests
                     $"StubLegacyParser only serves '{_servedMime}', got '{command.MimeType}'.");
             }
 
-            return new ImportResult(
-                Text: _text,
-                Sections: Array.Empty<ImportSection>(),
-                Warnings: Array.Empty<ImportWarning>(),
-                EngineVersion: "1.0.0",
-                TraceId: command.TraceId);
+            return new LegacyImportResult(
+                text: _text,
+                sections: Array.Empty<ImportSection>(),
+                warnings: Array.Empty<ImportWarning>(),
+                traceId: command.TraceId);
         }
     }
 

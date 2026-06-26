@@ -92,12 +92,11 @@ public sealed class PdfPigCvParser : ICvParser, IStructuredParser, IKnownMimePar
                 "Info"));
         }
 
-        return new ImportResult(
+        return new LegacyImportResult(
             text,
             sections,
             warnings,
-            EngineVersion: LegacyEngineVersion,
-            TraceId: command.TraceId);
+            command.TraceId);
     }
 
     ParseResult IStructuredParser.Parse(ImportCvCommand command)

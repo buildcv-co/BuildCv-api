@@ -21,13 +21,15 @@ public sealed class PdfPigCvParserTests
 
         var result = _parser.Parse(command);
 
-        result.Text.Should().Contain("EXPERIENCIA");
-        result.Text.Should().Contain("EDUCACIÓN");
-        result.Text.Should().Contain("HABILIDADES");
-        result.EngineVersion.Should().Be("1.0.0");
-        result.TraceId.Should().Be("trace-1");
-        result.Sections.Should().NotBeEmpty();
-        result.Sections.Select(s => s.Heading).Should().Contain("EXPERIENCIA");
+        result.Should().BeOfType<LegacyImportResult>();
+        var legacy = (LegacyImportResult)result;
+        legacy.Text.Should().Contain("EXPERIENCIA");
+        legacy.Text.Should().Contain("EDUCACIÓN");
+        legacy.Text.Should().Contain("HABILIDADES");
+        legacy.EngineVersion.Should().Be("1.0.0");
+        legacy.TraceId.Should().Be("trace-1");
+        legacy.Sections.Should().NotBeEmpty();
+        legacy.Sections.Select(s => s.Heading).Should().Contain("EXPERIENCIA");
     }
 
     [Fact]
@@ -72,8 +74,9 @@ public sealed class PdfPigCvParserTests
 
         var result = _parser.Parse(command);
 
-        result.Text.Should().Contain("DESARROLLO");
-        result.Text.Should().Contain("tecnología");
-        result.Text.Should().Contain("año");
+        var legacy = result.Should().BeOfType<LegacyImportResult>().Subject;
+        legacy.Text.Should().Contain("DESARROLLO");
+        legacy.Text.Should().Contain("tecnología");
+        legacy.Text.Should().Contain("año");
     }
 }

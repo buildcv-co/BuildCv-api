@@ -97,7 +97,7 @@ public sealed class IterateAdaptationHandler(
                 var score = 0;
                 if (passedArtI)
                 {
-                    var scoreCmd = new ScoreCvCommand(adaptedCv.AdaptedCv, request.VacancyText);
+                    var scoreCmd = new TextScoreCommand(adaptedCv.AdaptedCv, request.VacancyText);
                     var scoreResult = scoreHandler.Handle(scoreCmd);
                     score = scoreResult.Overall;
                 }

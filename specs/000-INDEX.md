@@ -7,6 +7,8 @@
 
 ## Constitución vigente
 
+> **Actualización 2026-06-27:** `009.2-auth-web` quedó ✅ **SHIPPED + ARCHIVED** como componente api del cambio cross-repo `009-auth-web`; verify `PASS_WITH_NOTES`; tag `009-auth-web-v1.0` apunta al SHIP commit api `66fcaf1a13d511eb088ae93443f255c376459ebf` (no al commit de archivo). Ver archive report en `../BuildCv-web/specs/009-auth-web/archive-report.md`.
+
 | Versión | Fecha | Estado | Diff |
 |---|---|---|---|
 | **1.2.0** | 2026-06-25 | ✅ Vigente | [specs/014-constitution-v1.2.0/spec.md](./014-constitution-v1.2.0/spec.md) |
@@ -33,7 +35,7 @@
 | 007 | `constitution-v1.1.0` | governance | ✅ RATIFICADA | `main` | — |
 | 008 | `observability` | v0.5.1 | ✅ SHIPPED | `main` | — |
 | 009 | `auth` | v1 | ✅ SHIPPED (47 tasks, 290 tests) | `main` | — |
-| 009.2 | `auth-web` (cross-repo: web frontend integration of 009-auth) | v1 | 🚧 **EN CURSO** (PR0 MERGED ✅; PR1-PR8 web pending) — `POST /api/v1/auth/web-signup` con body locked `{provider, providerAccountId, email, name}` + BFF auth via `BffCredentialFilter` (X-BFF-Key header + `Auth:BffApiKey` config + `FixedTimeEquals` + fail-closed) + `IRefreshTokenStore.RevokeAllForUserAsync` + bearer-only logout on `POST /api/v1/auth/logout`; 10 tests added (8 happy/edge + 2 BFF auth); PR0 fresh review verdict APPROVE_WITH_MINOR_NOTES (0 BLOCKER, 0 MAJOR post-patch, 5 MINOR + 2 NIT deferred to follow-ups); 9-PR breakdown locked cross-repo `feature-branch-chain` ([proposal](../BuildCv-web/specs/009-auth-web/proposal.md)); PR0 commit `df0ec06` merged to `api/main`. Required env: `Auth__BffApiKey` (api) must match `BFF_API_KEY` (web) before PR1 starts. | `api/main` (PR0); web branches TBD | — |
+| 009.2 | `auth-web` (cross-repo: web frontend integration of 009-auth) | v1 | ✅ **SHIPPED + ARCHIVED** as part of `009-auth-web` — api MVP scope PR0 + PR0 hardening shipped; verify `PASS_WITH_NOTES`; tag `009-auth-web-v1.0` targets SHIP commit `66fcaf1a13d511eb088ae93443f255c376459ebf` (not archive commit). Archive report: [../BuildCv-web/specs/009-auth-web/archive-report.md](../BuildCv-web/specs/009-auth-web/archive-report.md). | `main` | — |
 | 010 | `persistence` | v1 | ✅ SHIPPED (38 tasks, 342 tests) | `main` | — |
 | 011 | `factus` | v1 | ✅ SHIPPED (DIAN invoicing, opcional) | `main` | — |
 | 012 | `wompi` | v1 | ✅ SHIPPED (Wompi payment gateway, 3 chained PRs + warning-fix) | `main` | — |
@@ -196,18 +198,20 @@ Este feature NO tiene implementación en el backend. El API no recibe cambios: r
 - **Constitution compliance:** Art. III ✅ (no PII in logs), Art. IV ✅ (honest privacy policy), Art. VI ✅ (Clean Architecture ports), Art. IX ✅ (Habeas Data: consent, ARCO, audit trail)
 - **Deviations:** In-memory stores in Application layer (not Infrastructure), PKCE not implemented, error responses not RFC 9457
 
-### 009.2-auth-web (v1, cross-repo: web frontend integration of 009-auth) — 🚧 EN CURSO
+### 009.2-auth-web (v1, cross-repo: web frontend integration of 009-auth) — ✅ SHIPPED + ARCHIVED
 
 - **Proposal:** [../BuildCv-web/specs/009-auth-web/proposal.md](../BuildCv-web/specs/009-auth-web/proposal.md) (508 líneas, 9-PR breakdown locked cross-repo `feature-branch-chain`)
 - **Spec:** [../BuildCv-web/specs/009-auth-web/spec.md](../BuildCv-web/specs/009-auth-web/spec.md) (517 líneas, 21 REQs Given/When/Then + 8 NFRs + 6 Compliance + traceability matrix)
 - **Design:** [../BuildCv-web/specs/009-auth-web/design.md](../BuildCv-web/specs/009-auth-web/design.md) (1,572 líneas, 15 secciones, 8 endpoint discrepancies resueltas vs shipped backend)
 - **Tasks:** [../BuildCv-web/specs/009-auth-web/tasks.md](../BuildCv-web/specs/009-auth-web/tasks.md) (2,019 líneas, 83 tasks across 9 PRs)
 - **Apply progress:** [../BuildCv-web/specs/009-auth-web/apply-progress.md](../BuildCv-web/specs/009-auth-web/apply-progress.md) (290 líneas)
+- **Verify:** [../BuildCv-web/specs/009-auth-web/verify-report.md](../BuildCv-web/specs/009-auth-web/verify-report.md) (`PASS_WITH_NOTES`)
+- **Archive:** [../BuildCv-web/specs/009-auth-web/archive-report.md](../BuildCv-web/specs/009-auth-web/archive-report.md)
 - **Reviews:** [../BuildCv-web/specs/009-auth-web/reviews/pr0-fresh-review.md](../BuildCv-web/specs/009-auth-web/reviews/pr0-fresh-review.md) (484 líneas con addendum) + [pr0-patch-a-rereview.md](../BuildCv-web/specs/009-auth-web/reviews/pr0-patch-a-rereview.md) (372 líneas)
-- **Estado:** 🚧 **EN CURSO** (api PR0 MERGED ✅; web PR1-PR8 pending). PR0 deliverables (api): `POST /api/v1/auth/web-signup` (body locked `{provider, providerAccountId, email, name}`, reuses `IUserDataService.GetOrCreateAsync`), `IRefreshTokenStore.RevokeAllForUserAsync` (new helper), bearer-only logout on `POST /api/v1/auth/logout` (`RefreshToken` nullable for body-less), `BffCredentialFilter` IEndpointFilter at `/auth/web-signup` (X-BFF-Key header validated against `Auth:BffApiKey` config via `CryptographicOperations.FixedTimeEquals` constant-time, fail-closed default). 10 tests added (6 WebSignup happy/edge + 2 BFF auth + 2 RevokeAllForUserAsync). PR0 verdict: APPROVE_WITH_MINOR_NOTES (0 BLOCKER, 0 MAJOR post-patch, 5 MINOR + 2 NIT accepted para follow-up: logout 500 vs 401; missing OpenAPI `.Accepts/.Produces`; no test for missing providerAccountId; pre-existing `_providerKeyMap` bug; T-PR0-007 tracking gap; permissive email regex; X-BFF-Key no documentado en OpenAPI).
+- **Estado:** ✅ **SHIPPED + ARCHIVED**. Api component completed by PR0 + PR0 hardening: `POST /api/v1/auth/web-signup` (body locked `{provider, providerAccountId, email, name}`, BFF-only via `BffCredentialFilter` / `X-BFF-Key` / `Auth:BffApiKey`), `IRefreshTokenStore.RevokeAllForUserAsync`, bearer-only logout, logout 401 hardening, direct missing-`providerAccountId` coverage, and pragmatic email validation hardening. Cross-repo verify verdict: `PASS_WITH_NOTES`; MVP_BLOCKER 0; SHOULD_FIX_BEFORE_LAUNCH 0. Final tag `009-auth-web-v1.0` targets api SHIP commit `66fcaf1a13d511eb088ae93443f255c376459ebf` (not archive commit).
 - **PR0 api commits (3):** `e902c54` (feat auth endpoint web-signup, T-PR0-001/002/003) → `6ee083c` (feat auth revoke-all + bearer-only logout, T-PR0-004/005/006/007) → `df0ec06` (fix auth BFF credential filter, cierre MAJOR-1). **Merged to `api/main` via `--no-ff`** preserving branch history.
 - **Required env vars for PR1:** web BFF must include `X-BFF-Key: process.env.BFF_API_KEY` header in every POST to `BACKEND_URL/api/v1/auth/web-signup`. `BFF_API_KEY` (web env) must match `Auth__BffApiKey` (api env). Both missing or mismatched → 401 `BFF_AUTH_INVALID` (web) / 401 `BFF_AUTH_NOT_CONFIGURED` (api fail-closed default).
-- **Web counterpart:** [../BuildCv-web/specs/000-INDEX.md](../BuildCv-web/specs/000-INDEX.md) (🚧 EN CURSO).
+- **Web counterpart:** [../BuildCv-web/specs/000-INDEX.md](../BuildCv-web/specs/000-INDEX.md) (✅ SHIPPED + ARCHIVED).
 
 ### 010-persistence (v1)
 

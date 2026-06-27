@@ -14,3 +14,9 @@ public sealed record PrivacyPolicyResponse(
     DateTime EffectiveDate,
     IReadOnlyList<string> DataCategories,
     IReadOnlyList<string> Purposes);
+
+public sealed record WebSignupRequest(string Provider, string ProviderAccountId, string Email, string Name);
+
+public sealed record WebSignupResponse(Guid UserId);
+
+public sealed record LogoutResponse(string Message);

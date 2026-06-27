@@ -39,6 +39,7 @@ public sealed class OAuthCallbackHandlerTests
         public Task<string> CreateAsync(Guid userId, CancellationToken ct = default) => Task.FromResult("refresh-token-abc");
         public Task<Result<Guid>> ValidateAsync(string token, CancellationToken ct = default) => Task.FromResult(Result.Success(Guid.NewGuid()));
         public Task RevokeAsync(string token, CancellationToken ct = default) => Task.CompletedTask;
+        public Task RevokeAllForUserAsync(Guid userId, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     [Fact]
@@ -269,7 +270,7 @@ public sealed class OAuthCallbackHandlerTests
         var tokens = new RevocableRefreshTokenStore(revoked);
         var handler = new LogoutHandler(tokens);
 
-        var result = await handler.HandleAsync(new LogoutCommand("refresh-token-xyz"), CancellationToken.None);
+        var result = await handler.HandleAsync(new LogoutCommand("refresh-token-xyz", null), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         revoked.Should().Contain("refresh-token-xyz");
@@ -282,6 +283,7 @@ public sealed class OAuthCallbackHandlerTests
         public Task<string> CreateAsync(Guid userId, CancellationToken ct = default) => Task.FromResult("new-token");
         public Task<Result<Guid>> ValidateAsync(string token, CancellationToken ct = default) => Task.FromResult(Result.Failure<Guid>(new Error("AUTH/REFRESH_REVOKED", "Revoked")));
         public Task RevokeAsync(string token, CancellationToken ct = default) => Task.CompletedTask;
+        public Task RevokeAllForUserAsync(Guid userId, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private sealed class RevocableRefreshTokenStore : IRefreshTokenStore
@@ -291,6 +293,7 @@ public sealed class OAuthCallbackHandlerTests
         public Task<string> CreateAsync(Guid userId, CancellationToken ct = default) => Task.FromResult("new-token");
         public Task<Result<Guid>> ValidateAsync(string token, CancellationToken ct = default) => Task.FromResult(Result.Success(Guid.NewGuid()));
         public Task RevokeAsync(string token, CancellationToken ct = default) { _revoked.Add(token); return Task.CompletedTask; }
+        public Task RevokeAllForUserAsync(Guid userId, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private sealed class AlwaysEnabledFlag : ICreditsFeatureFlag

@@ -61,4 +61,22 @@ public sealed class EfRefreshTokenStore(BuildCvDbContext dbContext) : IRefreshTo
             await dbContext.SaveChangesAsync(ct);
         }
     }
+
+    public async Task RevokeAllForUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        var tokens = await dbContext.RefreshTokens
+            .Where(t => t.UserId == userId && t.RevokedAt == null)
+            .ToListAsync(ct);
+
+        var now = DateTime.UtcNow;
+        foreach (var token in tokens)
+        {
+            dbContext.Entry(token).Property(t => t.RevokedAt).CurrentValue = now;
+        }
+
+        if (tokens.Count > 0)
+        {
+            await dbContext.SaveChangesAsync(ct);
+        }
+    }
 }

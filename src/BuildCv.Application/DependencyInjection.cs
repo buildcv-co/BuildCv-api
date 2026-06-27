@@ -45,6 +45,7 @@ public static class DependencyInjection
         services.AddSingleton<LinkedInOAuthCallbackHandler>();
         services.AddSingleton<RefreshTokenHandler>();
         services.AddSingleton<LogoutHandler>();
+        services.AddSingleton<WebSignupHandler>();
         services.AddSingleton<GrantConsentHandler>();
         services.AddSingleton<RevokeConsentHandler>();
         services.AddSingleton<HasActiveConsentHandler>();

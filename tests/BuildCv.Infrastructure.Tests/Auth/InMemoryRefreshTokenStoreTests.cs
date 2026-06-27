@@ -75,4 +75,36 @@ public sealed class InMemoryRefreshTokenStoreTests
 
         result.IsFailure.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task RevokeAllForUserAsync_RemovesAllTokensForUser()
+    {
+        var store = new InMemoryRefreshTokenStore();
+        var userId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+
+        var token1 = await store.CreateAsync(userId);
+        var token2 = await store.CreateAsync(userId);
+        var token3 = await store.CreateAsync(userId);
+        var otherToken = await store.CreateAsync(otherUserId);
+
+        await store.RevokeAllForUserAsync(userId);
+
+        (await store.ValidateAsync(token1)).IsFailure.Should().BeTrue();
+        (await store.ValidateAsync(token2)).IsFailure.Should().BeTrue();
+        (await store.ValidateAsync(token3)).IsFailure.Should().BeTrue();
+        (await store.ValidateAsync(otherToken)).IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RevokeAllForUserAsync_IsNoOp_ForUnknownUserId()
+    {
+        var store = new InMemoryRefreshTokenStore();
+        var userId = Guid.NewGuid();
+        var token = await store.CreateAsync(userId);
+
+        await store.RevokeAllForUserAsync(Guid.NewGuid());
+
+        (await store.ValidateAsync(token)).IsSuccess.Should().BeTrue();
+    }
 }

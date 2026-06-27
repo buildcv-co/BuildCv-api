@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using BuildCv.Api.Contracts;
+using BuildCv.Api.Filters;
 using BuildCv.Api.Security;
 using BuildCv.Application.Features.Auth;
 using BuildCv.Infrastructure.Auth;
@@ -75,6 +76,13 @@ public static class AuthEndpoints
             JwtTokenAdapter jwtAdapter,
             CancellationToken ct) =>
         {
+            if (string.IsNullOrWhiteSpace(request.RefreshToken))
+            {
+                return Results.Json(
+                    new { type = "https://buildcv.com/errors/auth", title = "AUTH/MISSING_REFRESH_TOKEN", status = 400, detail = "refreshToken is required" },
+                    statusCode: 400);
+            }
+
             var command = new RefreshTokenCommand(request.RefreshToken);
             var result = await handler.HandleAsync(command, ct);
 
@@ -88,23 +96,46 @@ public static class AuthEndpoints
         .WithName("RefreshToken")
         .WithSummary("Refreshes an access token using a refresh token.");
 
-        app.MapPost("/api/v1/auth/logout", async (
-            RefreshTokenRequest request,
-            LogoutHandler handler,
+        app.MapPost("/api/v1/auth/web-signup", async (
+            WebSignupRequest request,
+            WebSignupHandler handler,
             CancellationToken ct) =>
         {
-            var command = new LogoutCommand(request.RefreshToken);
+            var command = new WebSignupCommand(request.Provider, request.ProviderAccountId, request.Email, request.Name);
             var result = await handler.HandleAsync(command, ct);
 
             return result.IsSuccess
-                ? Results.Ok(new { message = "Logged out successfully" })
+                ? Results.Ok(new WebSignupResponse(result.Value.UserId))
+                : Results.Json(
+                    new { type = "https://buildcv.com/errors/auth", title = result.Error.Code, status = 400, detail = result.Error.Message },
+                    statusCode: 400);
+        })
+        .AddEndpointFilter<BffCredentialFilter>()
+        .RequireRateLimiting(RateLimiting.AuthPolicy)
+        .WithName("WebSignup")
+        .WithSummary("Registers or upserts a user from the NextAuth session (web BFF).");
+
+        app.MapPost("/api/v1/auth/logout", async (
+            RefreshTokenRequest? request,
+            ClaimsPrincipal user,
+            LogoutHandler handler,
+            CancellationToken ct) =>
+        {
+            var userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+            Guid? userId = Guid.TryParse(userIdClaim, out var parsed) ? parsed : null;
+
+            var command = new LogoutCommand(request?.RefreshToken, userId);
+            var result = await handler.HandleAsync(command, ct);
+
+            return result.IsSuccess
+                ? Results.Ok(new LogoutResponse("Logged out successfully"))
                 : Results.Json(
                     new { type = "https://buildcv.com/errors/auth", title = "LOGOUT_FAILED", status = 500, detail = "Logout failed" },
                     statusCode: 500);
         })
         .RequireRateLimiting(RateLimiting.AuthPolicy)
         .WithName("Logout")
-        .WithSummary("Revokes a refresh token (logout).");
+        .WithSummary("Revokes refresh tokens (logout). Accepts refreshToken in body OR bearer JWT in Authorization header for full revoke-all.");
 
         return app;
     }
@@ -123,4 +154,4 @@ public static class AuthEndpoints
     }
 }
 
-public sealed record RefreshTokenRequest(string RefreshToken);
+public sealed record RefreshTokenRequest(string? RefreshToken);

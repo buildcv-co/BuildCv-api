@@ -143,6 +143,127 @@ public sealed class AuthEndpointTests(AuthTestWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task WebSignup_Returns200_WithUserId_WhenNewProvider()
+    {
+        var response = await PostWebSignupWithBffKey(
+            new WebSignupRequest("google", "g-new-1", "ada@example.com", "Ada"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("userId").GetGuid().Should().NotBe(Guid.Empty);
+    }
+
+    [Fact]
+    public async Task WebSignup_Returns400_OnUnknownProvider()
+    {
+        var response = await PostWebSignupWithBffKey(
+            new WebSignupRequest("facebook", "fb-1", "x@y.co", "X"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task WebSignup_Returns400_OnInvalidEmail()
+    {
+        var response = await PostWebSignupWithBffKey(
+            new WebSignupRequest("google", "g-1", "not-an-email", "X"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task WebSignup_IsIdempotent_SameUserIdOnSecondCall()
+    {
+        var first = await PostWebSignupWithBffKey(
+            new WebSignupRequest("google", "g-idem-1", "idem@example.com", "Idem"));
+        first.StatusCode.Should().Be(HttpStatusCode.OK);
+        var firstUserId = (await first.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("userId").GetGuid();
+
+        var second = await PostWebSignupWithBffKey(
+            new WebSignupRequest("google", "g-idem-1", "idem-updated@example.com", "Idem Updated"));
+        second.StatusCode.Should().Be(HttpStatusCode.OK);
+        var secondUserId = (await second.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("userId").GetGuid();
+
+        secondUserId.Should().Be(firstUserId);
+    }
+
+    [Fact]
+    public async Task WebSignup_Returns401_WithoutBffKey()
+    {
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/web-signup",
+            new WebSignupRequest("google", "g-nokey-1", "nokey@example.com", "NoKey"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task WebSignup_Returns401_WithInvalidBffKey()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/web-signup")
+        {
+            Content = JsonContent.Create(new WebSignupRequest("google", "g-badkey-1", "bad@example.com", "Bad")),
+        };
+        request.Headers.Add("X-BFF-Key", "definitely-not-the-real-key");
+
+        var response = await _client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    private async Task<HttpResponseMessage> PostWebSignupWithBffKey(WebSignupRequest body)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/web-signup")
+        {
+            Content = JsonContent.Create(body),
+        };
+        request.Headers.Add("X-BFF-Key", AuthTestWebApplicationFactory.BffApiKey);
+        return await _client.SendAsync(request);
+    }
+
+    [Fact]
+    public async Task Logout_WithBearerOnlyBody_RevokesAllRefreshTokens_ForUser()
+    {
+        var loginResponse = await LoginViaGoogle();
+        var accessToken = loginResponse.GetProperty("accessToken").GetString()!;
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        var logoutResponse = await _client.SendAsync(request);
+
+        logoutResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var refreshResponse = await _client.PostAsJsonAsync("/api/v1/auth/refresh",
+            new RefreshTokenRequest(loginResponse.GetProperty("refreshToken").GetString()!));
+        refreshResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task RefreshTokenRotation_PreservedAfterRevokeAll()
+    {
+        var loginResponse = await LoginViaGoogle();
+        var firstRefresh = loginResponse.GetProperty("refreshToken").GetString()!;
+
+        var firstRefreshResponse = await _client.PostAsJsonAsync("/api/v1/auth/refresh",
+            new RefreshTokenRequest(firstRefresh));
+        firstRefreshResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var secondRefresh = (await firstRefreshResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("refreshToken").GetString()!;
+
+        var accessToken = loginResponse.GetProperty("accessToken").GetString()!;
+        var logoutRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
+        logoutRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        var logoutResponse = await _client.SendAsync(logoutRequest);
+        logoutResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var reusedResponse = await _client.PostAsJsonAsync("/api/v1/auth/refresh",
+            new RefreshTokenRequest(secondRefresh));
+        reusedResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task Full_flow_login_protected_refresh_logout()
     {
         var loginResponse = await LoginViaGoogle();
@@ -186,6 +307,8 @@ public sealed class AuthEndpointTests(AuthTestWebApplicationFactory factory)
 
 public sealed class AuthTestWebApplicationFactory : WebApplicationFactory<Program>
 {
+    public const string BffApiKey = "test-bff-key-for-bff-auth-patch-a";
+
     protected override IHost CreateHost(IHostBuilder builder)
     {
         builder.ConfigureHostConfiguration(config =>
@@ -195,6 +318,7 @@ public sealed class AuthTestWebApplicationFactory : WebApplicationFactory<Progra
                 ["Jwt:Issuer"] = "buildcv-test",
                 ["Jwt:Audience"] = "buildcv-test",
                 ["Ai:ApiKey"] = "test-key",
+                ["Auth:BffApiKey"] = BffApiKey,
             }));
 
         builder.ConfigureServices(services =>

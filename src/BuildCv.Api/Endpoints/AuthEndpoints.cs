@@ -130,8 +130,8 @@ public static class AuthEndpoints
             return result.IsSuccess
                 ? Results.Ok(new LogoutResponse("Logged out successfully"))
                 : Results.Json(
-                    new { type = "https://buildcv.com/errors/auth", title = "LOGOUT_FAILED", status = 500, detail = "Logout failed" },
-                    statusCode: 500);
+                    new { type = "https://buildcv.com/errors/auth", title = result.Error.Code, status = 401, detail = result.Error.Message },
+                    statusCode: 401);
         })
         .RequireRateLimiting(RateLimiting.AuthPolicy)
         .WithName("Logout")

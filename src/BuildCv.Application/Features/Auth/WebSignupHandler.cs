@@ -49,14 +49,30 @@ public sealed class WebSignupHandler(IUserDataService userDataService)
 
     private static bool IsValidEmail(string email)
     {
-        var atIndex = email.IndexOf('@');
-        if (atIndex <= 0 || atIndex == email.Length - 1)
+        if (email.Length is > 254 or < 3 || email.Any(char.IsWhiteSpace))
         {
             return false;
         }
 
-        var dotIndex = email.IndexOf('.', atIndex);
-        return dotIndex > atIndex + 1 && dotIndex < email.Length - 1;
+        var atIndex = email.IndexOf('@');
+        if (atIndex <= 0 || atIndex != email.LastIndexOf('@') || atIndex > 64 || atIndex == email.Length - 1)
+        {
+            return false;
+        }
+
+        var domain = email[(atIndex + 1)..];
+        var labels = domain.Split('.');
+        return labels.Length >= 2
+            && labels[^1].Length >= 2
+            && labels.All(IsValidDomainLabel);
+    }
+
+    private static bool IsValidDomainLabel(string label)
+    {
+        return label.Length > 0
+            && label[0] != '-'
+            && label[^1] != '-'
+            && label.All(static c => char.IsAsciiLetterOrDigit(c) || c == '-');
     }
 }
 

@@ -173,6 +173,42 @@ public sealed class AuthEndpointTests(AuthTestWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task WebSignup_Returns400_OnMissingProviderAccountId()
+    {
+        var response = await PostWebSignupWithBffKey(new
+        {
+            provider = "google",
+            email = "missing-provider-account-id@example.com",
+            name = "Missing Provider Account Id",
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData("notanemail")]
+    [InlineData("@nodomain.com")]
+    [InlineData("spaces in@email.com")]
+    public async Task WebSignup_Returns400_OnMalformedEmail(string email)
+    {
+        var response = await PostWebSignupWithBffKey(
+            new WebSignupRequest("google", $"g-invalid-email-{email.Length}", email, "Invalid Email"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData("valid@example.com")]
+    [InlineData("user.name+tag@subdomain.example.co.uk")]
+    public async Task WebSignup_Returns200_OnValidEmail(string email)
+    {
+        var response = await PostWebSignupWithBffKey(
+            new WebSignupRequest("google", $"g-valid-email-{email.Length}", email, "Valid Email"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task WebSignup_IsIdempotent_SameUserIdOnSecondCall()
     {
         var first = await PostWebSignupWithBffKey(
@@ -213,7 +249,7 @@ public sealed class AuthEndpointTests(AuthTestWebApplicationFactory factory)
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    private async Task<HttpResponseMessage> PostWebSignupWithBffKey(WebSignupRequest body)
+    private async Task<HttpResponseMessage> PostWebSignupWithBffKey(object body)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/web-signup")
         {
@@ -238,6 +274,27 @@ public sealed class AuthEndpointTests(AuthTestWebApplicationFactory factory)
         var refreshResponse = await _client.PostAsJsonAsync("/api/v1/auth/refresh",
             new RefreshTokenRequest(loginResponse.GetProperty("refreshToken").GetString()!));
         refreshResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Logout_Returns401_WithoutAuthorizationHeader()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
+
+        var response = await _client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Logout_Returns401_WithMalformedAuthorizationHeader()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
+        request.Headers.TryAddWithoutValidation("Authorization", "not-a-valid-bearer-header");
+
+        var response = await _client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -319,6 +376,7 @@ public sealed class AuthTestWebApplicationFactory : WebApplicationFactory<Progra
                 ["Jwt:Audience"] = "buildcv-test",
                 ["Ai:ApiKey"] = "test-key",
                 ["Auth:BffApiKey"] = BffApiKey,
+                ["LocalAuth:Enabled"] = "false",
             }));
 
         builder.ConfigureServices(services =>

@@ -208,6 +208,12 @@ public static class DependencyInjection
         services.AddSingleton<IIterationService, IterationService>();
         services.AddHostedService<IterationCleanupWorker>();
 
+        services.AddSingleton<GenerateLlmFeedbackHandler>(sp => new GenerateLlmFeedbackHandler(
+            sp.GetRequiredService<ILlmFeedbackClient>(),
+            sp.GetRequiredService<IOptions<LlmFeedbackOptions>>().Value,
+            sp.GetRequiredService<ILlmFeedbackClock>(),
+            sp.GetRequiredService<ILogger<GenerateLlmFeedbackHandler>>()));
+
         return services;
     }
 
@@ -268,6 +274,8 @@ public static class DependencyInjection
             ApplyEnvironmentAlias(configuration, "PROVIDER", value => options.Provider = value);
             ApplyEnvironmentAlias(configuration, "MODEL", value => options.Model = value);
             ApplyEnvironmentAlias(configuration, "TIMEOUT_MS", value => options.TimeoutMs = int.Parse(value, CultureInfo.InvariantCulture));
+            ApplyEnvironmentAlias(configuration, "RATE_LIMIT:REQUESTS_PER_WINDOW", value => options.RateLimit.RequestsPerWindow = int.Parse(value, CultureInfo.InvariantCulture));
+            ApplyEnvironmentAlias(configuration, "RATE_LIMIT:WINDOW_SECONDS", value => options.RateLimit.WindowSeconds = int.Parse(value, CultureInfo.InvariantCulture));
             ApplyEnvironmentAlias(configuration, "REDACTION_ENABLED", value => options.RedactionEnabled = bool.Parse(value));
         });
         services.AddSingleton<ILlmFeedbackClock, SystemLlmFeedbackClock>();

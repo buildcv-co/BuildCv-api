@@ -28,6 +28,8 @@ public sealed class LlmFeedbackConfigurationTests
         options.Provider.Should().Be("fake");
         options.Model.Should().Be("fake-local-v1");
         options.TimeoutMs.Should().Be(5000);
+        options.RateLimit.RequestsPerWindow.Should().Be(30);
+        options.RateLimit.WindowSeconds.Should().Be(60);
         options.RedactionEnabled.Should().BeTrue();
     }
 
@@ -41,6 +43,8 @@ public sealed class LlmFeedbackConfigurationTests
                 ["LlmFeedback:Provider"] = "fake",
                 ["LlmFeedback:Model"] = "fake-local-v1",
                 ["LlmFeedback:TimeoutMs"] = "5000",
+                ["LlmFeedback:RateLimit:RequestsPerWindow"] = "12",
+                ["LlmFeedback:RateLimit:WindowSeconds"] = "30",
                 ["LlmFeedback:RedactionEnabled"] = "true",
                 ["Ai:Provider"] = "Anthropic",
             })
@@ -55,6 +59,8 @@ public sealed class LlmFeedbackConfigurationTests
         options.Provider.Should().Be("fake");
         options.Model.Should().Be("fake-local-v1");
         options.TimeoutMs.Should().Be(5000);
+        options.RateLimit.RequestsPerWindow.Should().Be(12);
+        options.RateLimit.WindowSeconds.Should().Be(30);
         options.RedactionEnabled.Should().BeTrue();
     }
 

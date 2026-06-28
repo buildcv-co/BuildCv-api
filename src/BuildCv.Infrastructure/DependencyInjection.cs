@@ -1,3 +1,4 @@
+using System.Globalization;
 using Anthropic.SDK;
 using BuildCv.Application.Common;
 using BuildCv.Application.Features.Adapt;
@@ -7,6 +8,7 @@ using BuildCv.Application.Features.Export;
 using BuildCv.Application.Features.Import;
 using BuildCv.Application.Features.Invoicing;
 using BuildCv.Application.Features.Iterations;
+using BuildCv.Application.Features.LlmFeedback;
 using BuildCv.Application.Features.Payments;
 using BuildCv.Application.Features.Scoring;
 using BuildCv.Application.Features.Subscriptions;
@@ -20,6 +22,7 @@ using BuildCv.Infrastructure.FeatureFlags;
 using BuildCv.Infrastructure.Invoicing;
 using BuildCv.Infrastructure.Iterations;
 using BuildCv.Infrastructure.Lexicon;
+using BuildCv.Infrastructure.LlmFeedback;
 using BuildCv.Infrastructure.Parsing;
 using BuildCv.Infrastructure.Payments;
 using BuildCv.Infrastructure.Pdf;
@@ -52,6 +55,7 @@ public static class DependencyInjection
         services.AddSingleton<SeverityPolicy>();
         services.AddSingleton<PromptBuilder>();
         RegisterAiClient(services, configuration);
+        RegisterLlmFeedbackClient(services, configuration);
         services.AddSingleton<AdaptCvHandler>(sp => new AdaptCvHandler(
             sp.GetRequiredService<IAiClient>(),
             sp.GetRequiredService<EntityExtractor>(),
@@ -253,5 +257,38 @@ public static class DependencyInjection
 
         throw new InvalidOperationException(
             $"Ai:Provider desconocido: '{provider}'. Valores válidos: Stub, Anthropic, Minimax.");
+    }
+
+    private static void RegisterLlmFeedbackClient(IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<LlmFeedbackOptions>(configuration.GetSection(LlmFeedbackOptions.SectionName));
+        services.PostConfigure<LlmFeedbackOptions>(options =>
+        {
+            ApplyEnvironmentAlias(configuration, "ENABLED", value => options.Enabled = bool.Parse(value));
+            ApplyEnvironmentAlias(configuration, "PROVIDER", value => options.Provider = value);
+            ApplyEnvironmentAlias(configuration, "MODEL", value => options.Model = value);
+            ApplyEnvironmentAlias(configuration, "TIMEOUT_MS", value => options.TimeoutMs = int.Parse(value, CultureInfo.InvariantCulture));
+            ApplyEnvironmentAlias(configuration, "REDACTION_ENABLED", value => options.RedactionEnabled = bool.Parse(value));
+        });
+        services.AddSingleton<ILlmFeedbackClock, SystemLlmFeedbackClock>();
+
+        var provider = configuration[$"{LlmFeedbackOptions.SectionName}:Provider"];
+        if (string.IsNullOrWhiteSpace(provider) || provider.Equals("fake", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<ILlmFeedbackClient, FakeLlmFeedbackClient>();
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"LlmFeedback:Provider desconocido: '{provider}'. Valor válido en PR1: fake.");
+    }
+
+    private static void ApplyEnvironmentAlias(IConfiguration configuration, string key, Action<string> apply)
+    {
+        var value = configuration[$"LLM_FEEDBACK:{key}"];
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            apply(value);
+        }
     }
 }

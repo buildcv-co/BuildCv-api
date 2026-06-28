@@ -12,5 +12,14 @@ public sealed class LlmFeedbackOptions
 
     public int TimeoutMs { get; set; } = 5000;
 
+    public LlmFeedbackRateLimitOptions RateLimit { get; set; } = new();
+
     public bool RedactionEnabled { get; set; } = true;
+}
+
+public sealed class LlmFeedbackRateLimitOptions
+{
+    public int RequestsPerWindow { get; set; } = 30;
+
+    public int WindowSeconds { get; set; } = 60;
 }

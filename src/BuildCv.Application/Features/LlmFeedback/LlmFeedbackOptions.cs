@@ -8,9 +8,17 @@ public sealed class LlmFeedbackOptions
 
     public string Provider { get; set; } = "fake";
 
-    public string Model { get; set; } = "fake-local-v1";
+    public string BaseUrl { get; set; } = "https://api.minimax.io/anthropic";
+
+    public string ApiKey { get; set; } = string.Empty;
+
+    public string Model { get; set; } = "MiniMax-M2.7";
 
     public int TimeoutMs { get; set; } = 5000;
+
+    public int MaxInputLength { get; set; } = 32000;
+
+    public int MaxOutputTokens { get; set; } = 1024;
 
     public LlmFeedbackRateLimitOptions RateLimit { get; set; } = new();
 

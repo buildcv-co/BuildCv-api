@@ -273,7 +273,11 @@ public static class DependencyInjection
             ApplyEnvironmentAlias(configuration, "ENABLED", value => options.Enabled = bool.Parse(value));
             ApplyEnvironmentAlias(configuration, "PROVIDER", value => options.Provider = value);
             ApplyEnvironmentAlias(configuration, "MODEL", value => options.Model = value);
+            ApplyEnvironmentAlias(configuration, "BASE_URL", value => options.BaseUrl = value);
+            ApplyEnvironmentAlias(configuration, "API_KEY", value => options.ApiKey = value);
             ApplyEnvironmentAlias(configuration, "TIMEOUT_MS", value => options.TimeoutMs = int.Parse(value, CultureInfo.InvariantCulture));
+            ApplyEnvironmentAlias(configuration, "MAX_INPUT_LENGTH", value => options.MaxInputLength = int.Parse(value, CultureInfo.InvariantCulture));
+            ApplyEnvironmentAlias(configuration, "MAX_OUTPUT_TOKENS", value => options.MaxOutputTokens = int.Parse(value, CultureInfo.InvariantCulture));
             ApplyEnvironmentAlias(configuration, "RATE_LIMIT:REQUESTS_PER_WINDOW", value => options.RateLimit.RequestsPerWindow = int.Parse(value, CultureInfo.InvariantCulture));
             ApplyEnvironmentAlias(configuration, "RATE_LIMIT:WINDOW_SECONDS", value => options.RateLimit.WindowSeconds = int.Parse(value, CultureInfo.InvariantCulture));
             ApplyEnvironmentAlias(configuration, "REDACTION_ENABLED", value => options.RedactionEnabled = bool.Parse(value));
@@ -287,8 +291,29 @@ public static class DependencyInjection
             return;
         }
 
+        if (provider.Equals("minimax", StringComparison.OrdinalIgnoreCase))
+        {
+            ValidateMinimaxOptions(configuration.GetSection(LlmFeedbackOptions.SectionName).Get<LlmFeedbackOptions>() ?? new LlmFeedbackOptions { Provider = provider });
+            services.AddHttpClient<MinimaxLlmFeedbackClient>(MinimaxLlmFeedbackClient.HttpClientName);
+            services.AddSingleton<ILlmFeedbackClient>(sp => sp.GetRequiredService<MinimaxLlmFeedbackClient>());
+            return;
+        }
+
         throw new InvalidOperationException(
-            $"LlmFeedback:Provider desconocido: '{provider}'. Valor válido en PR1: fake.");
+            $"LlmFeedback:Provider desconocido: '{provider}'. Valores válidos: fake, minimax.");
+    }
+
+    private static void ValidateMinimaxOptions(LlmFeedbackOptions options)
+    {
+        if (options.Enabled && string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            throw new InvalidOperationException("LlmFeedback provider minimax requires a server-side API key.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.Model) || !Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out _) || options.TimeoutMs <= 0 || options.MaxInputLength <= 0 || options.MaxOutputTokens <= 0)
+        {
+            throw new InvalidOperationException("LlmFeedback provider minimax has invalid non-secret configuration.");
+        }
     }
 
     private static void ApplyEnvironmentAlias(IConfiguration configuration, string key, Action<string> apply)

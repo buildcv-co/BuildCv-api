@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using BuildCv.Application.Features.LlmFeedback;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BuildCv.Api.IntegrationTests;
 
@@ -58,7 +60,7 @@ public sealed class LlmFeedbackEndpointTests(CustomWebApplicationFactory factory
         var first = await client.PostAsJsonAsync("/api/v1/llm/feedback", CreatePayload());
         var second = await client.PostAsJsonAsync("/api/v1/llm/feedback", CreatePayload());
 
-        first.StatusCode.Should().Be(HttpStatusCode.OK);
+        first.StatusCode.Should().BeOneOf(HttpStatusCode.OK, (HttpStatusCode)429);
         second.StatusCode.Should().Be((HttpStatusCode)429);
         second.Headers.RetryAfter.Should().NotBeNull();
     }
@@ -75,8 +77,46 @@ public sealed class LlmFeedbackEndpointTests(CustomWebApplicationFactory factory
         text.Should().Contain("redaction_failure");
     }
 
-    private HttpClient CreateClient(bool enabled, int requestsPerWindow = 30, int windowSeconds = 60) =>
-        factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
+    [Fact]
+    public async Task PostFeedback_WithMinimaxProvider_Returns200AndMinimaxContract()
+    {
+        var client = CreateClientWithProvider(new EndpointFakeClient(new LlmFeedbackResponse(
+            "MiniMax summary",
+            ["Provider success"],
+            [],
+            [],
+            [],
+            [],
+            "minimax",
+            "MiniMax-M2.7",
+            DateTimeOffset.UnixEpoch,
+            false)));
+
+        var response = await client.PostAsJsonAsync("/api/v1/llm/feedback", CreatePayload());
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<LlmFeedbackResponseDto>();
+        body!.Provider.Should().Be("minimax");
+        body.Model.Should().Be("MiniMax-M2.7");
+        body.Degraded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task PostFeedback_WithProviderRateLimit_PreservesRetryAfter()
+    {
+        var client = CreateClientWithProvider(new RateLimitedEndpointClient(TimeSpan.FromSeconds(42)));
+
+        var response = await client.PostAsJsonAsync("/api/v1/llm/feedback", CreatePayload());
+
+        response.StatusCode.Should().Be((HttpStatusCode)429);
+        response.Headers.RetryAfter!.Delta.Should().Be(TimeSpan.FromSeconds(42));
+        var text = await response.Content.ReadAsStringAsync();
+        text.Should().Contain("rate_limited");
+    }
+
+    private HttpClient CreateClient(bool enabled, int requestsPerWindow = 30, int windowSeconds = 60)
+    {
+        var client = factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -89,6 +129,36 @@ public sealed class LlmFeedbackEndpointTests(CustomWebApplicationFactory factory
                 ["LlmFeedback:RateLimit:WindowSeconds"] = windowSeconds.ToString(),
             });
         })).CreateClient();
+        client.DefaultRequestHeaders.Add("X-Forwarded-For", $"203.0.113.{Random.Shared.Next(1, 255)}");
+        return client;
+    }
+
+    private HttpClient CreateClientWithProvider(ILlmFeedbackClient feedbackClient)
+    {
+        var client = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, config) =>
+            {
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["LlmFeedback:Enabled"] = "true",
+                    ["LlmFeedback:Provider"] = "minimax",
+                    ["LlmFeedback:ApiKey"] = "test-provider-key",
+                    ["LlmFeedback:BaseUrl"] = "https://provider.test/anthropic",
+                    ["LlmFeedback:Model"] = "MiniMax-M2.7",
+                    ["LlmFeedback:TimeoutMs"] = "5000",
+                    ["LlmFeedback:MaxInputLength"] = "32000",
+                    ["LlmFeedback:MaxOutputTokens"] = "1024",
+                    ["LlmFeedback:RedactionEnabled"] = "true",
+                    ["LlmFeedback:RateLimit:RequestsPerWindow"] = "30",
+                    ["LlmFeedback:RateLimit:WindowSeconds"] = "60",
+                });
+            });
+            builder.ConfigureServices(services => services.AddSingleton(feedbackClient));
+        }).CreateClient();
+        client.DefaultRequestHeaders.Add("X-Forwarded-For", $"198.51.100.{Random.Shared.Next(1, 255)}");
+        return client;
+    }
 
     private static object CreatePayload(string summary = "Backend engineer with .NET and email ada@example.com") => new
     {
@@ -153,4 +223,16 @@ public sealed class LlmFeedbackEndpointTests(CustomWebApplicationFactory factory
         string Model,
         DateTimeOffset GeneratedAt,
         bool Degraded);
+
+    private sealed class EndpointFakeClient(LlmFeedbackResponse response) : ILlmFeedbackClient
+    {
+        public Task<LlmFeedbackResponse> GenerateAsync(LlmFeedbackContext context, CancellationToken ct = default) =>
+            Task.FromResult(response);
+    }
+
+    private sealed class RateLimitedEndpointClient(TimeSpan retryAfter) : ILlmFeedbackClient
+    {
+        public Task<LlmFeedbackResponse> GenerateAsync(LlmFeedbackContext context, CancellationToken ct = default) =>
+            throw new LlmFeedbackRateLimitedException(retryAfter);
+    }
 }

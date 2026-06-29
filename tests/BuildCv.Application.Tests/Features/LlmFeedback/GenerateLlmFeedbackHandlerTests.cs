@@ -92,6 +92,68 @@ public sealed class GenerateLlmFeedbackHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_OverMaxInputLengthReturnsValidationErrorBeforeProviderBoundary()
+    {
+        var client = new CapturingClient();
+        var handler = CreateHandler(client, new LlmFeedbackOptions { Enabled = true, MaxInputLength = 10 });
+
+        var result = await handler.HandleAsync(CreateRequest(), CancellationToken.None);
+
+        result.ErrorCode.Should().Be("validation_error");
+        result.StatusCode.Should().Be(400);
+        client.Calls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task HandleAsync_RedactionDisabledPassesRawSerializedInputByConfiguration()
+    {
+        var client = new CapturingClient();
+        var handler = CreateHandler(client, new LlmFeedbackOptions { Enabled = true, RedactionEnabled = false });
+
+        await handler.HandleAsync(CreateRequest(), CancellationToken.None);
+
+        client.CapturedContext!.RedactedCvText.Should().Contain("ada@example.com");
+        client.CapturedContext.RedactedCvText.Should().NotContain("[PHONE_REDACTED]");
+    }
+
+    [Fact]
+    public async Task HandleAsync_ProviderRateLimitedReturns429AndRetryAfter()
+    {
+        var handler = CreateHandler(new RateLimitedClient(TimeSpan.FromSeconds(42)), new LlmFeedbackOptions { Enabled = true, Provider = "minimax", Model = "MiniMax-M2.7" });
+
+        var result = await handler.HandleAsync(CreateRequest(), CancellationToken.None);
+
+        result.ErrorCode.Should().Be("rate_limited");
+        result.StatusCode.Should().Be(429);
+        result.RetryAfter.Should().Be(TimeSpan.FromSeconds(42));
+    }
+
+    [Fact]
+    public async Task HandleAsync_ProviderRateLimitedWithoutRetryAfterReturns429WithoutHeaderMetadata()
+    {
+        var handler = CreateHandler(new RateLimitedClient(null), new LlmFeedbackOptions { Enabled = true, Provider = "minimax", Model = "MiniMax-M2.7" });
+
+        var result = await handler.HandleAsync(CreateRequest(), CancellationToken.None);
+
+        result.ErrorCode.Should().Be("rate_limited");
+        result.StatusCode.Should().Be(429);
+        result.RetryAfter.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task HandleAsync_ProviderUnavailableReturns502SanitizedForMinimax()
+    {
+        var handler = CreateHandler(new ThrowingUnavailableClient(), new LlmFeedbackOptions { Enabled = true, Provider = "minimax", Model = "MiniMax-M2.7" });
+
+        var result = await handler.HandleAsync(CreateRequest(), CancellationToken.None);
+
+        result.ErrorCode.Should().Be("unavailable");
+        result.StatusCode.Should().Be(502);
+        result.Detail.Should().NotContain("ApiKey");
+        result.Detail.Should().NotContain("test-provider-key");
+    }
+
+    [Fact]
     public async Task HandleAsync_LogsMetadataOnlyAndDegradedReasonLatencyTraceId()
     {
         var logger = new CapturingLogger<GenerateLlmFeedbackHandler>();
@@ -181,6 +243,18 @@ public sealed class GenerateLlmFeedbackHandlerTests
             await Task.Delay(TimeSpan.FromSeconds(5), ct);
             return new LlmFeedbackResponse("late", [], [], [], [], [], "fake", "fake-local-v1", DateTimeOffset.UnixEpoch, false);
         }
+    }
+
+    private sealed class RateLimitedClient(TimeSpan? retryAfter) : ILlmFeedbackClient
+    {
+        public Task<LlmFeedbackResponse> GenerateAsync(LlmFeedbackContext context, CancellationToken ct = default) =>
+            throw new LlmFeedbackRateLimitedException(retryAfter);
+    }
+
+    private sealed class ThrowingUnavailableClient : ILlmFeedbackClient
+    {
+        public Task<LlmFeedbackResponse> GenerateAsync(LlmFeedbackContext context, CancellationToken ct = default) =>
+            throw new LlmFeedbackUnavailableException("ApiKey test-provider-key failed");
     }
 
     private sealed class FixedClock : ILlmFeedbackClock

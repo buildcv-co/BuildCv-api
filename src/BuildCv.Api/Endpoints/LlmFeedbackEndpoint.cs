@@ -10,6 +10,7 @@ public static class LlmFeedbackEndpoint
         app.MapPost("/api/v1/llm/feedback", async Task<IResult> (
             LlmFeedbackRequest request,
             GenerateLlmFeedbackHandler handler,
+            HttpContext httpContext,
             CancellationToken ct) =>
         {
             var validation = Validate(request);
@@ -22,6 +23,14 @@ public static class LlmFeedbackEndpoint
             if (result.Response is not null)
             {
                 return Results.Ok(result.Response);
+            }
+
+            if (result.RetryAfter is not null)
+            {
+                httpContext.Response.Headers.RetryAfter = Math.Ceiling(result.RetryAfter.Value.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                return Results.Json(
+                    new { error = result.ErrorCode, detail = result.Detail },
+                    statusCode: result.StatusCode);
             }
 
             return Results.Json(

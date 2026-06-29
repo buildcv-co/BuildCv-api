@@ -44,7 +44,8 @@ public sealed class LlmFeedbackRateLimitFilter(IOptions<LlmFeedbackOptions> opti
             return "user:" + user;
         }
 
-        return "ip:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+        var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[0].Trim();
+        return "ip:" + (string.IsNullOrWhiteSpace(forwardedFor) ? context.Connection.RemoteIpAddress?.ToString() ?? "unknown" : forwardedFor);
     }
 
     private sealed record RateLimitBucket(DateTimeOffset WindowStartedAt, int Count);

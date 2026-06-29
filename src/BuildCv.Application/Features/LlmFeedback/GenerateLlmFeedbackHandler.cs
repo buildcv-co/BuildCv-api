@@ -30,6 +30,10 @@ public sealed class GenerateLlmFeedbackHandler(
                 request,
                 currentOptions.RedactionEnabled ? PiiRedactor.Redact(cvText) : cvText,
                 currentOptions.RedactionEnabled ? PiiRedactor.Redact(jobText) : jobText);
+            if (context.RedactedCvText.Length + context.RedactedJobText.Length > currentOptions.MaxInputLength)
+            {
+                return GenerateLlmFeedbackResult.Failure("validation_error", 400, "LLM feedback input exceeds configured maximum length.");
+            }
         }
         catch (LlmFeedbackRedactionException)
         {
@@ -55,6 +59,18 @@ public sealed class GenerateLlmFeedbackHandler(
         {
             return Degraded("timeout", stopwatch.ElapsedMilliseconds, traceId, currentOptions);
         }
+        catch (LlmFeedbackRateLimitedException ex)
+        {
+            return GenerateLlmFeedbackResult.RateLimited(ex.RetryAfter);
+        }
+        catch (LlmFeedbackValidationException)
+        {
+            return GenerateLlmFeedbackResult.Failure("validation_error", 400, "Invalid LLM feedback request.");
+        }
+        catch (LlmFeedbackUnavailableException)
+        {
+            return GenerateLlmFeedbackResult.Failure("unavailable", 502, "LLM feedback provider is unavailable.");
+        }
         catch (Exception)
         {
             return Degraded("provider_unavailable", stopwatch.ElapsedMilliseconds, traceId, currentOptions);
@@ -76,7 +92,7 @@ public sealed class GenerateLlmFeedbackHandler(
             [],
             [],
             [],
-            "fake",
+            currentOptions.Provider,
             currentOptions.Model,
             clock.UtcNow,
             true));

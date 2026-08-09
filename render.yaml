@@ -10,6 +10,8 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
+      - key: Iteration__PublicApiEnabled
+        value: "false"
       # Para el hito M1 (adaptación con IA), define la clave en el panel de Render:
       # - key: Ai__ApiKey
       #   sync: false

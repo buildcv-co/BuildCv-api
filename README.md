@@ -35,6 +35,16 @@ dotnet format                                # CI verifica con --verify-no-chang
 dotnet run --project src/BuildCv.Api         # http://localhost:5080 · docs en /scalar/v1
 ```
 
+### Iteration public API containment
+
+The public iteration POST and GET routes are fail-closed. They are mapped only when
+`Iteration__PublicApiEnabled=true` is explicitly configured for controlled compatibility
+or development testing. Keep the key absent or set it to `false` in production.
+
+To deactivate the routes, remove the key or set it to `false`, then restart the service.
+Enabling the routes is not a rollback strategy and does not remediate iteration persistence
+or ownership risks.
+
 ## Docker / Deploy (Render)
 
 ```bash

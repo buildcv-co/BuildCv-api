@@ -184,7 +184,13 @@ app.MapInvoicingEndpoints();
 app.MapCreditEndpoints();
 app.MapFeatureFlagAdminEndpoints();
 app.MapSubscriptionEndpoints();
-app.MapIterationEndpoints();
+
+var iterationPublicApiEnabled = builder.Configuration.GetValue<bool>("Iteration:PublicApiEnabled");
+app.Logger.LogInformation("Iteration public API enabled: {PublicApiEnabled}", iterationPublicApiEnabled);
+if (iterationPublicApiEnabled)
+{
+    app.MapIterationEndpoints();
+}
 
 if (builder.Configuration.GetValue<bool>("Wompi:Enabled"))
 {

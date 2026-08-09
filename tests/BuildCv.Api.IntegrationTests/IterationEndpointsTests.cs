@@ -258,7 +258,10 @@ public sealed class IterationTestWebApplicationFactory : WebApplicationFactory<P
                 ["Jwt:Issuer"] = "buildcv-test",
                 ["Jwt:Audience"] = "buildcv-test",
                 ["Ai:ApiKey"] = "test-key",
+                ["Ai:Provider"] = "Stub",
                 ["Credits:Enabled"] = "true",
+                ["Iteration:PublicApiEnabled"] = "true",
+                ["LocalAuth:Enabled"] = "false",
             }));
 
         builder.ConfigureServices(services =>
